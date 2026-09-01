@@ -1,0 +1,7 @@
+# ShopBot's User Guide is Copyright (c) 1996-2015 ShopBot Tools, Inc.
+# Keep the local copy for reference, but don't republish it from a public repo.
+# Download it from https://shopbottools.com/support/documentation
+ShopBot User Guide*.pdf
+
+.DS_Store
+*.swp
