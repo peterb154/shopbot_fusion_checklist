@@ -22,6 +22,10 @@ SLOPE_MIN, SLOPE_MAX = 5.0, 85.0   # degrees from horizontal that count as 3D
 # Deriving stepdown from this means a bigger ball runs a bigger step for the SAME
 # finish, instead of just taking longer.
 CUSP_MM = 0.083
+HOLE_R_MM   = 5.0    # a non-vertical cylinder this small is an angled HOLE, not a
+                     # surface - 3-axis cannot make it and it must not drag a part
+                     # into a 3D pass
+MIN_3D_AREA = 100.0  # mm2 of genuinely sloped surface before a part earns a pass
 FORCE = []                      # sheet indices to rebuild even if already done
 
 def classify(f):
@@ -90,8 +94,12 @@ def face_slopes(f, n=3):
     if t == "Plane":
         a = math.degrees(math.acos(min(1.0, abs(f.geometry.normal.z))))
         return [a, a]
-    if t == "Cylinder" and abs(abs(f.geometry.axis.z) - 1.0) < 1e-6:
-        return [90.0, 90.0]
+    if t == "Cylinder":
+        g = f.geometry
+        if abs(abs(g.axis.z) - 1.0) < 1e-6:
+            return [90.0, 90.0]                    # ordinary vertical hole/wall
+        if g.radius * 10 <= HOLE_R_MM:
+            return [90.0, 90.0]                    # angled hole - not machinable, not a bevel
     ev = f.evaluator
     rng = ev.parametricRange()
     if rng is None: return []
@@ -104,15 +112,21 @@ def face_slopes(f, n=3):
             if ok: out.append(math.degrees(math.acos(min(1.0, abs(nv.z)))))
     return out
 
-def is_sloped(b):
-    """True only if some face overlaps the range the operation will actually cut.
+def sloped_area(b):
+    """mm2 of face that overlaps the range the operation will actually cut.
     A face at 86-89deg is a near-vertical wall: inside the op's slope confinement
-    it yields nothing, and an empty body in the batch can take the whole
-    operation down with it."""
+    it yields nothing, and an empty body in the batch takes the whole operation
+    down with it. A few mm2 of curvature is not a bevel either - one 42mm2 face
+    was pulling a 1838x703mm panel into a 3D finishing pass."""
+    tot = 0.0
     for f in b.faces:
         sl = face_slopes(f)
-        if sl and max(sl) >= SLOPE_MIN and min(sl) <= SLOPE_MAX: return True
-    return False
+        if sl and max(sl) >= SLOPE_MIN and min(sl) <= SLOPE_MAX:
+            tot += f.area * 100
+    return tot
+
+def is_sloped(b):
+    return sloped_area(b) >= MIN_3D_AREA
 
 def true_normal(f):
     """Outward normal of the FACE. f.geometry.normal is the underlying surface's
@@ -250,7 +264,8 @@ def run(_context: str):
         for b in occ.bRepBodies:
             if not b.isSolid: continue
             bodies.append(b)
-            if is_sloped(b): sloped.append((b, occ.name.split(':')[0].strip()))
+            a3 = sloped_area(b)
+            if a3 >= MIN_3D_AREA: sloped.append((b, occ.name.split(':')[0].strip(), a3))
             _,_,_,_, zb, zt = extents(b)
             pl = [f for f in b.faces if f.geometry.objectType == adsk.core.Plane.classType()
                   and abs(abs(f.geometry.normal.z)-1.0) < 1e-6]
@@ -419,8 +434,11 @@ def run(_context: str):
                 i = setup.operations.createInput("contour3d"); i.tool = t3
                 i.displayName = name
                 o = setup.operations.add(i)
-                setp(o, common + [("tool_feedCutting","90 in/min"),
-                                  ("tool_feedPlunge","45 in/min"),
+                # A 3D contour is dominated by Z moves, not cutting: at 45 ipm
+                # plunge this pass took 30.6 min, at 90 it takes 16.9 for the same
+                # toolpath. Feed rate barely registered by comparison.
+                setp(o, common + [("tool_feedCutting","150 in/min"),
+                                  ("tool_feedPlunge","90 in/min"),
                                   ("maximumStepdown", f"{cusp_stepdown_mm(t3)}mm"),
                                   ("tolerance","0.05mm"),
                                   ("boundaryMode","'selection'"),
@@ -442,13 +460,13 @@ def run(_context: str):
                     time.sleep(1)
                 return o
             print(f"      3D stepdown {cusp_stepdown_mm(t3)}mm for {CUSP_MM}mm cusp")
-            print(f"      3D bevels on {len(sloped)}: "
-                  f"{', '.join(sorted({n for _, n in sloped}))}")
-            o = make_3d([b for b, _ in sloped], "3c Bevels 3D ball nose")
+            for _, n, a3 in sorted(sloped, key=lambda r: -r[2]):
+                print(f"        {n:<22} {a3:8.1f} mm2 of true bevel")
+            o = make_3d([b for b, _, _ in sloped], "3c Bevels 3D ball nose")
             if not o.hasToolpath:
                 o.deleteMe()
                 good, bad = [], []
-                for b, nm in sloped:
+                for b, nm, _ in sloped:
                     probe = make_3d([b], "__probe 3d")
                     (good if probe.hasToolpath else bad).append((b, nm))
                     probe.deleteMe()

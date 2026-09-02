@@ -36,6 +36,8 @@ state before rebuilding anything.
 | `totals.py` | Cycle time per sheet and per operation, largest first. |
 | `regen.py` | Regenerates any operation that has no toolpath. |
 | `toolaudit.py` | Lists the tool library and every operation using each tool, with time. Run it before cutting: it is how you catch a toolpath built around a bit nobody owns. |
+| `why3d.py` | For one sheet, every face that pulled a part into the 3D pass, with type, slope and area. Answers "why is it cutting a bevel there?" - which is how the angled-hole bug was found. |
+| `reach.py` | Concave radii on sloped faces against the ball radius of the tool, so you know before cutting which corners the tool cannot enter. |
 | `real3d.py` | Samples surface normals to separate genuinely sloped faces from vertical extrusion walls. Most NURBS faces in an imported model are walls the profile already cuts - 202 faces looked 3D, 138 actually were. |
 | `flipped.py` | Reports every pocket floor and which way it faces. A floor facing down means the part is placed upside down and would be machined through from the wrong side. Run after any re-nest. |
 | `paramdiff.py` | Diffs every setup parameter between two setups. The tool that found the nanometre stock bug below - when one setup works and another does not, diff them rather than theorise. |
@@ -106,6 +108,17 @@ state before rebuilding anything.
   does not clear the underside until the point is one tip-length past it: 0.95mm
   for a 118-degree 1/8in, 1.67mm for a 7/32in. The -0.02in that suits an endmill
   leaves a cone of uncut material. Derived from `tool_tipAngle`.
+- **An angled hole is not a bevel.** Any cylinder whose axis is not vertical
+  looks like 3D geometry, so a 6.35mm hole drilled at an angle counted the same
+  as a 488mm-radius curved surface. On ECS VENT PLATE 1 that was 20 of 38 faces
+  and 7,900 of 10,764 mm2, and it pulled a 1838x703mm panel into a 3D pass for
+  one 42mm2 face. Non-vertical cylinders under `HOLE_R_MM` are holes - 3-axis
+  cannot make them anyway - and a part needs `MIN_3D_AREA` of real slope to earn
+  a pass.
+- **A 3D contour's cost is Z moves, not feed rate.** Raising the cutting feed
+  from 90 to 150 ipm saved 3.7 min; raising the PLUNGE feed from 45 to 90 took
+  the same pass from 30.6 to 16.9. The 45 ipm was inherited from a recipe written
+  for a different operation.
 - **3D bevels are confined by slope angle.** A 3D contour with no
   `slopeConfinement` re-machines every flat top and vertical wall the 2D
   operations already cut: 16 min against 1.1 for the same two parts. Confine it
