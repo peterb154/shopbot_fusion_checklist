@@ -88,7 +88,7 @@ def discover(des):
         ylo, yhi = min(p['y0'] for p in on), max(p['y1'] for p in on)
         th = collections.Counter(p['th'] for p in on).most_common(1)[0][0]
         out.append(dict(idx=i, sheet=s, parts=on, spanx=hi-lo, spany=yhi-ylo, th=th,
-                        name=f"Sheet {i} - {th:.0f}mm ({s['n']} X{s['x0']:.0f} Y{s['y0']:.0f})"))
+                        name=f"Sheet {i} - {th:.0f}mm"))
     return out
 
 def offsets(spanx, spany):

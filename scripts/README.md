@@ -29,6 +29,7 @@ state before rebuilding anything.
 | `offsets.py` | Read-only. Per sheet: part span vs machine travel, and the valid range of stock offsets. Run this **before** building - it is what catches a nest that cannot be cut. |
 | `shift.py` | For a sheet that does not fit, names the part at the extreme, the gap next to it, and how far it must move. |
 | `breakdown.py` | Per-operation cycle time, plus hole diameters for the boring ops. Finds where the time actually goes. |
+| `rename_sheets.py` | Names every sheet body `Sheet N - <thickness>mm` by position, and moves any stray root-level sheet body into the PLYWOOD component. Run after re-nesting so setup names and conversation match. |
 | `nestcheck.py` | Read-only. Sheets, parts per sheet, span vs travel, bounding-box overlaps and any part on no sheet. Run after re-nesting. |
 | `recentre.py` | Recentres stock offsets where travel is tight and regenerates. |
 | `singlepass.py` | Switches contour ops to a single full-depth pass and reports the time change. |
@@ -40,8 +41,9 @@ state before rebuilding anything.
 
 - **Sheet discovery** - a solid body wider than 2400mm and taller than 1200mm is
   a sheet; anything overlapping its footprint is a part on it. Sheets are
-  numbered top-to-bottom, left-to-right, and the sheet body may be a root-level
-  body rather than an occurrence.
+  numbered top-to-bottom, left-to-right. Setups take the sheet body's name, so
+  run `rename_sheets.py` first and the two stay in step. Sheet bodies are
+  modelled 2450 x 1230; real stock is 2440 x 1220 and that is what the CAM uses.
 - **Stock offsets** are derived, not fixed. Valid offset range is
   `[R, travel - span - R]` for cutter radius `R`. It takes 20mm where there is
   room and the midpoint where there is not, and **refuses to build** a sheet with
