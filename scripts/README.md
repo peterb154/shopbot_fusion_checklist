@@ -35,6 +35,7 @@ state before rebuilding anything.
 | `singlepass.py` | Switches contour ops to a single full-depth pass and reports the time change. |
 | `totals.py` | Cycle time per sheet and per operation, largest first. |
 | `regen.py` | Regenerates any operation that has no toolpath. |
+| `toolaudit.py` | Lists the tool library and every operation using each tool, with time. Run it before cutting: it is how you catch a toolpath built around a bit nobody owns. |
 | `real3d.py` | Samples surface normals to separate genuinely sloped faces from vertical extrusion walls. Most NURBS faces in an imported model are walls the profile already cuts - 202 faces looked 3D, 138 actually were. |
 | `flipped.py` | Reports every pocket floor and which way it faces. A floor facing down means the part is placed upside down and would be machined through from the wrong side. Run after any re-nest. |
 | `paramdiff.py` | Diffs every setup parameter between two setups. The tool that found the nanometre stock bug below - when one setup works and another does not, diff them rather than theorise. |
@@ -92,6 +93,19 @@ state before rebuilding anything.
   designed use: both the up-cut and down-cut sections engage, giving a clean face
   top and bottom. Multi-pass is what tears out, because only the first pass
   touches the top surface. Halves profile time and keeps the finishing pass.
+- **Confirm the operator owns a tool before building around it.** Tool numbers in
+  a library are a claim, not an inventory. Two of the entries here were invented
+  to make a toolpath work and only questioned later. `toolaudit.py` prints tool
+  -> operations -> minutes so the question gets asked early.
+- **3D stepdown comes from a cusp height, not a number.** `CUSP_MM` is the
+  scallop between passes; stepdown is derived from it and the tool's ball radius.
+  Copying a stepdown that suited a different tool wastes the bigger tool: the
+  0.04in that suits a 1.587mm ball is 1.442mm on a 3.175mm ball for identical
+  finish, and that alone took sheet 4's 3D pass from 37.4 to 24.9 min.
+- **A pointed drill needs deeper breakthrough than a flat endmill.** Full diameter
+  does not clear the underside until the point is one tip-length past it: 0.95mm
+  for a 118-degree 1/8in, 1.67mm for a 7/32in. The -0.02in that suits an endmill
+  leaves a cone of uncut material. Derived from `tool_tipAngle`.
 - **3D bevels are confined by slope angle.** A 3D contour with no
   `slopeConfinement` re-machines every flat top and vertical wall the 2D
   operations already cut: 16 min against 1.1 for the same two parts. Confine it

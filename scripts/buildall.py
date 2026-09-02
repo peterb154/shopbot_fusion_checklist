@@ -15,8 +15,13 @@ DRILL_FEED = {7: "40 in/min", 8: "20 in/min"}
 DRILL_PECK = {7: "6mm", 8: "5mm"}
 BORE_MIN  = SMALL_DIA * 1.15       # below this there is no room to helix - must drill
 DRILL_TOL = 0.40                   # hole within this of 3.175mm -> plunge it
-TOOL_BIG, TOOL_SMALL, TOOL_VENT, TOOL_3D = 4, 6, 7, 3
+TOOL_BIG, TOOL_SMALL, TOOL_VENT, TOOL_3D = 4, 6, 7, 9
 SLOPE_MIN, SLOPE_MAX = 5.0, 85.0   # degrees from horizontal that count as 3D
+# Surface finish target for 3D passes, as scallop height between passes. 0.083mm
+# is what the Amana 46286 (1.587mm ball) gives at the 0.04in the README quotes.
+# Deriving stepdown from this means a bigger ball runs a bigger step for the SAME
+# finish, instead of just taking longer.
+CUSP_MM = 0.083
 FORCE = []                      # sheet indices to rebuild even if already done
 
 def classify(f):
@@ -41,6 +46,24 @@ def shopbot_machine():
         except Exception:
             pass
     return None
+
+def cusp_stepdown_mm(t):
+    """Stepdown giving CUSP_MM scallop height for this tool's ball radius."""
+    p = {x.name: x for x in t.parameters}
+    R = p['tool_cornerRadius'].value.value * 10 if 'tool_cornerRadius' in p else 0.0
+    if R <= CUSP_MM: return 1.016
+    return round(2.0 * math.sqrt(max(R*R - (R - CUSP_MM)**2, 1e-9)), 3)
+
+def drill_breakthrough_mm(t):
+    """How far past the underside a DRILL must go. A pointed drill does not cut
+    full diameter until the point is one tip-length clear, so the -0.02in that
+    suits a flat endmill leaves a cone of uncut material behind."""
+    p = {x.name: x for x in t.parameters}
+    dia = p['tool_diameter'].value.value * 10
+    ang = p['tool_tipAngle'].value.value if 'tool_tipAngle' in p else 118.0
+    if not (30.0 < ang < 180.0): ang = 118.0
+    tip = (dia / 2.0) / math.tan(math.radians(ang / 2.0))
+    return round(tip + 0.5, 2)
 
 def tool_by_number(n):
     lm = adsk.cam.CAMManager.get().libraryManager.toolLibraries
@@ -359,9 +382,13 @@ def run(_context: str):
         i = setup.operations.createInput("drill"); i.tool = t
         i.displayName = f"3 Drill {dia:.2f}mm #{tno}"
         o = setup.operations.add(i)
+        bt = drill_breakthrough_mm(t)
         setp(o, common + [("tool_feedPlunge", DRILL_FEED.get(tno, "20 in/min")),
                           ("cycleType","'chip-breaking'"),
-                          ("peckingDepth", DRILL_PECK.get(tno, "5mm"))])
+                          ("peckingDepth", DRILL_PECK.get(tno, "5mm")),
+                          ("bottomHeight_offset", f"-{bt}mm")])
+        print(f"        T{tno} breakthrough -{bt}mm (118deg point needs "
+              f"{bt - 0.5:.2f}mm to clear full diameter)")
         o.parameters.itemByName("holeFaces").value.value = faces
         # Generate now: if the drill will not produce a toolpath, these holes have
         # to fall back to boring, and the bore op is created further down - after
@@ -394,7 +421,8 @@ def run(_context: str):
                 o = setup.operations.add(i)
                 setp(o, common + [("tool_feedCutting","90 in/min"),
                                   ("tool_feedPlunge","45 in/min"),
-                                  ("maximumStepdown","0.04in"), ("tolerance","0.05mm"),
+                                  ("maximumStepdown", f"{cusp_stepdown_mm(t3)}mm"),
+                                  ("tolerance","0.05mm"),
                                   ("boundaryMode","'selection'"),
                                   ("boundaryContainment","'inside'"),
                                   # Without this it re-machines every flat top and
@@ -413,9 +441,10 @@ def run(_context: str):
                     if f3.isGenerationCompleted: break
                     time.sleep(1)
                 return o
+            print(f"      3D stepdown {cusp_stepdown_mm(t3)}mm for {CUSP_MM}mm cusp")
             print(f"      3D bevels on {len(sloped)}: "
                   f"{', '.join(sorted({n for _, n in sloped}))}")
-            o = make_3d([b for b, _ in sloped], "3c Bevels 3D tapered ball")
+            o = make_3d([b for b, _ in sloped], "3c Bevels 3D ball nose")
             if not o.hasToolpath:
                 o.deleteMe()
                 good, bad = [], []
@@ -428,7 +457,7 @@ def run(_context: str):
                 for _, nm in bad:
                     print(f"          NOT FINISHED: {nm}")
                 if good:
-                    o2 = make_3d([b for b, _ in good], "3c Bevels 3D tapered ball")
+                    o2 = make_3d([b for b, _ in good], "3c Bevels 3D ball nose")
                     if not o2.hasToolpath:
                         o2.deleteMe()
                         for b, nm in good:
