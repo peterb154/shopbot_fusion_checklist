@@ -36,6 +36,7 @@ state before rebuilding anything.
 | `totals.py` | Cycle time per sheet and per operation, largest first. |
 | `regen.py` | Regenerates any operation that has no toolpath. |
 | `toolaudit.py` | Lists the tool library and every operation using each tool, with time. Run it before cutting: it is how you catch a toolpath built around a bit nobody owns. |
+| `cylkind.py` | Tells an angled hole from a rounded edge by normal direction. Radius cannot do it - a 3.175mm round and a 6.35mm angled hole are identical by radius. |
 | `why3d.py` | For one sheet, every face that pulled a part into the 3D pass, with type, slope and area. Answers "why is it cutting a bevel there?" - which is how the angled-hole bug was found. |
 | `reach.py` | Concave radii on sloped faces against the ball radius of the tool, so you know before cutting which corners the tool cannot enter. |
 | `real3d.py` | Samples surface normals to separate genuinely sloped faces from vertical extrusion walls. Most NURBS faces in an imported model are walls the profile already cuts - 202 faces looked 3D, 138 actually were. |
@@ -108,6 +109,22 @@ state before rebuilding anything.
   does not clear the underside until the point is one tip-length past it: 0.95mm
   for a 118-degree 1/8in, 1.67mm for a 7/32in. The -0.02in that suits an endmill
   leaves a cone of uncut material. Derived from `tool_tipAngle`.
+- **A silhouette is silently ignored as a 3D machining boundary.**
+  `machiningBoundarySel` accepts a SilhouetteSelection, reports no warning, and
+  then scans the entire model anyway: 724,507 feed moves and 64m of cutting where
+  the answer is 3,287 and 7.5m. Use chain selections from the top face's outer
+  loop. This is invisible in the time estimate - it just looks like 3D is
+  expensive.
+- **Containment must be 'outside' when the bevels are the outer edge.** With
+  'inside' the region shrinks by a tool radius and edge rounds get no toolpath at
+  all, silently: two parts on sheet 1 had zero moves. Verify by posting and
+  bucketing the moves by part, not by trusting `hasToolpath`.
+- **Tell an angled hole from a rounded edge by NORMAL DIRECTION, not radius.**
+  If the face normal points toward the cylinder axis, material is outside it and
+  it is a hole. Pointing away means material is inside: a convex round, which is
+  exactly what a ball nose is for. Radius cannot distinguish them - a 3.175mm
+  round and a 6.35mm angled hole look the same. Getting this wrong wrote off
+  8,040mm2 of machinable edge on one part as "needs hand finishing".
 - **An angled hole is not a bevel.** Any cylinder whose axis is not vertical
   looks like 3D geometry, so a 6.35mm hole drilled at an angle counted the same
   as a 488mm-radius curved surface. On ECS VENT PLATE 1 that was 20 of 38 faces

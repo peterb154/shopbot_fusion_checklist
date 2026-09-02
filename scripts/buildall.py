@@ -86,6 +86,21 @@ def setp(holder, pairs):
         try: p.expression = v
         except Exception as e: print(f"      ! {k}: {str(e)[:55]}")
 
+def normal_faces_axis(f):
+    """True if the face normal points TOWARD the cylinder axis - material is
+    outside, so it is a hole. False means material is inside: a rounded edge."""
+    g = f.geometry; ev = f.evaluator
+    ok, prm = ev.getParameterAtPoint(f.pointOnFace)
+    if not ok: return True
+    ok2, n = ev.getNormalAtParameter(prm)
+    ok3, pt = ev.getPointAtParameter(prm)
+    if not (ok2 and ok3): return True
+    ax, org = g.axis, g.origin
+    vx, vy, vz = pt.x-org.x, pt.y-org.y, pt.z-org.z
+    d = vx*ax.x + vy*ax.y + vz*ax.z
+    rx, ry, rz = vx-d*ax.x, vy-d*ax.y, vz-d*ax.z
+    return (rx*n.x + ry*n.y + rz*n.z) < 0
+
 def face_slopes(f, n=3):
     """Angles from horizontal over the face. 0 = flat, 90 = vertical wall.
     A NURBS face is usually just a vertical extrusion wall, which the outer
@@ -98,8 +113,11 @@ def face_slopes(f, n=3):
         g = f.geometry
         if abs(abs(g.axis.z) - 1.0) < 1e-6:
             return [90.0, 90.0]                    # ordinary vertical hole/wall
-        if g.radius * 10 <= HOLE_R_MM:
-            return [90.0, 90.0]                    # angled hole - not machinable, not a bevel
+        if normal_faces_axis(f):
+            return [90.0, 90.0]                    # angled HOLE - no 3-axis toolpath makes it
+        # otherwise the material is inside the cylinder: a convex rounded edge,
+        # which is exactly what a ball nose is for. Radius is NOT the test - a
+        # 3.175mm round and a 6.35mm angled hole look identical by radius.
     ev = f.evaluator
     rng = ev.parametricRange()
     if rng is None: return []
@@ -111,6 +129,26 @@ def face_slopes(f, n=3):
             ok, nv = ev.getNormalAtParameter(adsk.core.Point2D.create(u, v))
             if ok: out.append(math.degrees(math.acos(min(1.0, abs(nv.z)))))
     return out
+
+def top_outer_loop(b):
+    """Edges of the outer loop of the body's top face, for use as a 3D machining
+    boundary. A SilhouetteSelection is accepted by machiningBoundarySel and then
+    silently ignored - Fusion scans the whole model instead, which is 724,507 feed
+    moves and 64m of cutting where the real answer is 3,287 and 7.5m. Chains are
+    honoured."""
+    zs = [v.geometry.z*10 for v in b.vertices]
+    zt = max(zs)
+    best = None
+    for f in b.faces:
+        if f.geometry.objectType != adsk.core.Plane.classType(): continue
+        if abs(abs(f.geometry.normal.z) - 1.0) > 1e-6: continue
+        fz = [v.geometry.z*10 for v in f.vertices]
+        if not fz or abs(sum(fz)/len(fz) - zt) > 0.05: continue
+        if best is None or f.area > best.area: best = f
+    if best is None: return None
+    for L in best.loops:
+        if L.isOuter: return list(L.edges)
+    return None
 
 def sloped_area(b):
     """mm2 of face that overlaps the range the operation will actually cut.
@@ -442,7 +480,11 @@ def run(_context: str):
                                   ("maximumStepdown", f"{cusp_stepdown_mm(t3)}mm"),
                                   ("tolerance","0.05mm"),
                                   ("boundaryMode","'selection'"),
-                                  ("boundaryContainment","'inside'"),
+                                  # The bevels ARE the outer edge, so the tool has
+                                  # to reach past the boundary. With 'inside' the
+                                  # region shrinks by a tool radius and edge rounds
+                                  # get no toolpath at all - silently.
+                                  ("boundaryContainment","'outside'"),
                                   # Without this it re-machines every flat top and
                                   # vertical wall the 2D ops already cut: 16min vs 1.1
                                   ("slopeConfinement","true"),
@@ -451,8 +493,19 @@ def run(_context: str):
                 cv = o.parameters.itemByName("machiningBoundarySel").value
                 sel = cv.getCurveSelections(); sel.clear()
                 for b in bs:
-                    sil = sel.createNewSilhouetteSelection(); sil.inputGeometry = [b]
-                    sil.loopType = adsk.cam.LoopTypes.OnlyOutsideLoops
+                    edges = top_outer_loop(b)
+                    ok = False
+                    if edges:
+                        try:
+                            c = sel.createNewChainSelection()
+                            c.inputGeometry = [e for e in edges]
+                            ok = True
+                        except Exception as e:
+                            print(f"          ! chain boundary failed "
+                                  f"({len(edges)} edges): {str(e).splitlines()[-1][:50]}")
+                    if not ok:   # no usable top loop - falls back, but it over-scans
+                        sil = sel.createNewSilhouetteSelection(); sil.inputGeometry = [b]
+                        sil.loopType = adsk.cam.LoopTypes.OnlyOutsideLoops
                 cv.applyCurveSelections(sel)
                 f3 = cam.generateToolpath(o)
                 for _ in range(600):
