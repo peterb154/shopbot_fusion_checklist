@@ -15,7 +15,7 @@ def run(_context: str):
         ch = sum(1 for a,b in zip(seq, seq[1:]) if a != b)
         print(f"  {s.name[:42]:<42}{s.operations.count:>4}  {str(seq):<14}{t:>8.1f}   "
               f"{ch} change{'s' if ch!=1 else ''}")
-    print(f"\n  {'TOTAL (5 sheets, Sheet 1 not built)':<42}{'':>4}{'':>16}{tot:>8.1f} min "
+    print(f"\n  {'TOTAL (all sheets)':<42}{'':>4}{'':>16}{tot:>8.1f} min "
           f"= {tot/60:.2f} h")
     print("\n  per-operation, largest first:")
     rows = []

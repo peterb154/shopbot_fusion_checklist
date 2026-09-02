@@ -155,7 +155,12 @@ def run(_context: str):
                  ("job_stockFixedXOffset", f"{ox}mm"),
                  ("job_stockFixedY", f"{SHEET_H}mm"), ("job_stockFixedYMode","'front'"),
                  ("job_stockFixedYOffset", f"{oy}mm"),
-                 ("job_stockFixedZ", f"{s['th']}mm"), ("job_stockFixedZMode","'bottom'"),
+                 # 0.01mm proud of the model. Parts laid flat by joints end up a
+                 # few NANOMETRES thicker than nominal, and if any part pokes above
+                 # the stock top Fusion silently refuses to drill - no warning, no
+                 # toolpath. Cost ~3h of helical boring before it was found.
+                 ("job_stockFixedZ", f"{round(s['th'] + 0.01, 3)}mm"),
+                 ("job_stockFixedZMode","'bottom'"),
                  ("job_stockFixedZOffset","0mm"),
                  ("wcs_origin_mode","'stockPoint'"), ("wcs_origin_boxPoint","'top 1'"),
                  ("job_programName", f"'{1000+s['idx']}'")])

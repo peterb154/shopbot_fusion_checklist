@@ -311,6 +311,33 @@ The bottom face is the wrong outline on a bevelled part - on some of these it wa
 would collide, because it tries to take the inner features with the same lead-in.
 
 ---
+#### A model a few nanometres proud of the stock silently disables drilling
+
+Worth its own heading because it cost about three hours. Parts laid flat with
+joints end up fractionally thicker than nominal:
+
+```text
+surfaceZHigh   0.00000306983725      <- model top, 3nm above stock top
+stockZHigh     0.0
+```
+
+With the model poking above the stock top by *any* amount, a drill operation
+generates **no toolpath and no warning**. `hasToolpath` is False, `hasWarning`
+is False, the operation just sits there empty. Contour, pocket and bore all work
+normally on the same setup, so it reads as a drill-specific fault and sends you
+looking at tool diameters, hole depths and cylinder axis directions. None of
+those are it.
+
+Fix: build the stock 0.01mm proud - `job_stockFixedZ = thickness + 0.01mm` with
+`job_stockFixedZMode = 'bottom'`. WCS zero then sits 10 microns above the true
+surface, which is nothing against a 0.5mm breakthrough.
+
+Finding it: when one setup works and another does not, **diff every parameter**
+rather than reasoning about what ought to matter (`scripts/paramdiff.py`). Two
+setups differing in 15 parameters, and the answer was the one that looked like
+a rounding artefact.
+
+---
 ---
 
 ## Known Issues & Investigation

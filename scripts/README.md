@@ -35,6 +35,7 @@ state before rebuilding anything.
 | `singlepass.py` | Switches contour ops to a single full-depth pass and reports the time change. |
 | `totals.py` | Cycle time per sheet and per operation, largest first. |
 | `regen.py` | Regenerates any operation that has no toolpath. |
+| `paramdiff.py` | Diffs every setup parameter between two setups. The tool that found the nanometre stock bug below - when one setup works and another does not, diff them rather than theorise. |
 | `cleanup.py` | Deletes leftover `__trial` operations and reports setup health. Run before posting. |
 
 ## How `buildall.py` decides things
@@ -64,6 +65,12 @@ state before rebuilding anything.
   on 18mm stock. A hole that matches a drill you own gets plunged instead:
   ~2s. `DRILLABLE` maps diameter to tool number; first match wins. Boring is
   ~3x faster with the 1/4" than the 1/8", so `BIG` is set at 8mm, not 9.
+- **Stock is built 0.01mm proud of the model.** Parts laid flat by joints come
+  out a few *nanometres* thicker than nominal - 12.00000307mm against 12mm of
+  stock. If any part pokes above the stock top, however slightly, Fusion refuses
+  to drill: no warning, no error, just no toolpath. Every other strategy works
+  fine, which makes it look like a drill problem. This cost ~3 hours of needless
+  helical boring before `paramdiff.py` turned it up.
 - **A drill that fails to generate falls back to boring.** Fusion silently
   refuses to drill on some setups - no warning, just no toolpath. The drill op
   is generated immediately so the holes can be added to the bore op, which is
