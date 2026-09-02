@@ -3,8 +3,20 @@ import adsk.core, adsk.fusion, adsk.cam, collections, time
 TX, TY, R = 2438.4, 1219.2, 3.175
 SHEET_W, SHEET_H = 2440.0, 1220.0     # standard baltic birch
 MIN_LATITUDE = 10.0                   # refuse to build a sheet tighter than this
-BIG = 9.0
-TOOL_BIG, TOOL_SMALL = 4, 6
+BIG = 8.0          # >= this bores with the 1/4in - 3x faster than the 1/8in
+VENT_DIA, VENT_TOL = 6.35, 0.05    # cosmetic vent holes - diameter not critical
+SMALL_DIA = 3.175                  # the 1/8in tools
+# Holes that match a drill you own get plunged instead of helical-bored.
+# (diameter mm, tool number, tolerance) - first match wins, so order matters.
+DRILLABLE = ((6.350, 7, 0.05),     # cosmetic vent holes - deliberately drilled undersize
+             (5.556, 8, 0.15),     # M4 furniture inserts, 7/32in
+             (3.175, 7, 0.40))     # at-size 1/8in
+DRILL_FEED = {7: "40 in/min", 8: "20 in/min"}
+DRILL_PECK = {7: "6mm", 8: "5mm"}
+BORE_MIN  = SMALL_DIA * 1.15       # below this there is no room to helix - must drill
+DRILL_TOL = 0.40                   # hole within this of 3.175mm -> plunge it
+TOOL_BIG, TOOL_SMALL, TOOL_VENT = 4, 6, 7
+FORCE = []                      # sheet indices to rebuild even if already done
 
 def classify(f):
     k = collections.Counter()
@@ -14,6 +26,20 @@ def classify(f):
     if k.get("Line3D", 0) > 0: return "fillet"
     if k.get("Circle3D", 0) >= 1 and k.get("Arc3D", 0) == 0: return "hole"
     return "other"
+
+def shopbot_machine():
+    """Load the machine from the library. Do not copy it off setup 0 - that
+    breaks the moment setup 0 does not exist, e.g. after clearing all setups."""
+    ml = adsk.cam.CAMManager.get().libraryManager.machineLibrary
+    for loc in (adsk.cam.LibraryLocations.LocalLibraryLocation,
+                adsk.cam.LibraryLocations.Fusion360LibraryLocation):
+        try:
+            for u in ml.childAssetURLs(ml.urlByLocation(loc)):
+                if "ShopBot PRSalpha" in u.leafName:
+                    return ml.machineAtURL(u)
+        except Exception:
+            pass
+    return None
 
 def tool_by_number(n):
     lm = adsk.cam.CAMManager.get().libraryManager.toolLibraries
@@ -68,7 +94,10 @@ def discover(des):
 def offsets(spanx, spany):
     hx, hy = TX - spanx - R, TY - spany - R
     if hx < R or hy < R: return None, None, min(hx-R, hy-R)
-    ox = min(20.0, max(R, hx*0.5)); oy = min(20.0, max(R, hy*0.5))
+    # 20mm of edge trim only if that still leaves 20mm of placement tolerance on
+    # the far side; otherwise centre the offset so the tolerance is shared.
+    ox = 20.0 if hx >= 40.0 else max(R, hx*0.5)
+    oy = 20.0 if hy >= 40.0 else max(R, hy*0.5)
     return round(ox,2), round(oy,2), min(hx-R, hy-R)
 
 def run(_context: str):
@@ -78,6 +107,15 @@ def run(_context: str):
     cam = adsk.cam.CAM.cast(doc.products.itemByProductType("CAMProductType"))
     plan = discover(des)
     have = {cam.setups.item(i).name: cam.setups.item(i) for i in range(cam.setups.count)}
+
+    m = shopbot_machine()
+    for i in range(cam.setups.count):
+        st = cam.setups.item(i)
+        try: has = st.machine is not None and st.machine.model
+        except Exception: has = False
+        if not has and m is not None:
+            st.machine = m
+            print(f"backfilled machine on {st.name}")
 
     target = None
     print("plan:")
@@ -89,7 +127,10 @@ def run(_context: str):
         if lat < MIN_LATITUDE:      state = f"BLOCKED latitude {lat:.2f}mm"
         elif cooked:                state = f"done ({n_ops} ops)"
         else:                       state = "TO BUILD"
-        if state == "TO BUILD" and target is None: target = (s, ox, oy, exist)
+        if s['idx'] in FORCE and lat >= MIN_LATITUDE:
+            state = "FORCED REBUILD"
+        if state in ("TO BUILD", "FORCED REBUILD") and target is None:
+            target = (s, ox, oy, exist)
         print(f"  {s['idx']}  {s['name'][:44]:<44} {len(s['parts']):>3}p  "
               f"span {s['spanx']:7.1f} x {s['spany']:6.1f}  lat {lat:6.2f}  {state}")
     if not target:
@@ -102,7 +143,9 @@ def run(_context: str):
         si.models = [p['occ'] for p in s['parts'] if p['occ']]
         setup = cam.setups.add(si)
         setup.name = s['name']
-        setup.machine = cam.setups.item(0).machine
+        m = shopbot_machine()
+        if m is None: raise RuntimeError("ShopBot machine not found in library")
+        setup.machine = m
         print(f"    created setup, {len(si.models)} models, machine "
               f"{setup.machine.vendor} {setup.machine.model}")
     while setup.operations.count: setup.operations.item(0).deleteMe()
@@ -117,11 +160,15 @@ def run(_context: str):
                  ("wcs_origin_mode","'stockPoint'"), ("wcs_origin_boxPoint","'top 1'"),
                  ("job_programName", f"'{1000+s['idx']}'")])
 
-    stepdown = round((s['th'] + 0.508) / 2 + 0.15, 2)
-    print(f"    stock {s['th']:.0f}mm -> stepdown {stepdown}mm for 2 passes")
+    # Single full-depth pass. On a compression bit this is the designed use -
+    # up-cut and down-cut sections both engage, clean face top and bottom. Multi-
+    # pass is what tears out, because only the first pass touches the top surface.
+    stepdown = round(s['th'] + 1.0, 2)
+    print(f"    stock {s['th']:.0f}mm -> stepdown {stepdown}mm, single pass")
 
     names = {m.name for m in setup.models}
-    bodies, cutouts, big_c, small_c, floors = [], [], [], [], []
+    bodies, cutouts, big_c, small_c, tiny_c, floors = [], [], [], [], [], []
+    drill_c = collections.defaultdict(list)
     for occ in des.rootComponent.allOccurrences:
         if occ.name not in names: continue
         for b in occ.bRepBodies:
@@ -148,9 +195,31 @@ def run(_context: str):
                 if g.objectType != adsk.core.Cylinder.classType(): continue
                 if abs(abs(g.axis.z)-1.0) > 1e-6: continue
                 if classify(f) != "hole": continue
-                (big_c if g.radius*20 >= BIG else small_c).append(f)
+                d = g.radius*20
+                nm = occ.name.split(':')[0]
+                hit = next((t for dia, t, tol in DRILLABLE if abs(d - dia) <= tol), None)
+                if hit:                 drill_c[hit].append((f, nm))
+                elif d >= BIG:          big_c.append(f)           # 1/4in bore
+                elif d >= BORE_MIN:     small_c.append((f, nm))   # 1/8in bore
+                else:                   tiny_c.append((f, nm, round(d, 2)))
+    import collections as _c
     print(f"    bodies {len(bodies)} | cutouts {len(cutouts)} | big {len(big_c)} | "
-          f"small {len(small_c)} | floors {len(floors)}")
+          f"drill {sum(len(v) for v in drill_c.values())} | small {len(small_c)} | "
+          f"floors {len(floors)}")
+    groups = [(f"-> #{t} drill", g) for t, g in sorted(drill_c.items())] + \
+             [("-> #6 bore", small_c)]
+    for lbl, grp in groups:
+        if grp:
+            byp = _c.Counter(nm for _, nm in grp)
+            byd = _c.Counter(round(f.geometry.radius*20, 2) for f, _ in grp)
+            print(f"      {lbl}: {dict(byd)}  on {dict(byp)}")
+    if tiny_c:
+        byd = _c.Counter((d, nm) for _, nm, d in tiny_c)
+        print(f"      *** {len(tiny_c)} holes too small for any tool you have "
+              f"(under {SMALL_DIA - DRILL_TOL:.2f}mm) - NOT MACHINED:")
+        for (d, nm), n in byd.most_common():
+            print(f"          {d:5.2f}mm x{n:3}  on {nm}")
+
 
     t_big, t_small = tool_by_number(TOOL_BIG), tool_by_number(TOOL_SMALL)
     common = [("tool_spindleSpeed","14000"), ("tool_coolant","'disabled'"),
@@ -160,6 +229,8 @@ def run(_context: str):
                      ("maximumStepdown", f"{stepdown}mm"), ("doRoughingPasses","true"),
                      ("maximumStepover","0.1in"), ("useStockToLeave","true"),
                      ("stockToLeave","0.02in"), ("compensation","'left'")]
+
+    small_f = [f for f, _ in small_c]
 
     def contour(nm, build):
         i = setup.operations.createInput("contour2d"); i.tool = t_big; i.displayName = nm
@@ -187,13 +258,45 @@ def run(_context: str):
                 c = sel.createNewChainSelection(); c.inputGeometry = edges
                 c.sideType = adsk.cam.SideTypes.AlwaysInsideSideType
         contour("1 Inner cutouts 1/4in", b1)
-    for label, faces, tool, feed in (("2 Bore large 1/4in", big_c, t_big, "180 in/min"),
-                                     ("3 Bore small 1/8in", small_c, t_small, "125 in/min")):
-        if not faces: continue
-        i = setup.operations.createInput("bore"); i.tool = tool; i.displayName = label
+    if big_c:
+        i = setup.operations.createInput("bore"); i.tool = t_big
+        i.displayName = "2 Bore large 1/4in"
         o = setup.operations.add(i)
-        setp(o, common + [("tool_feedCutting", feed), ("tool_feedPlunge","50 in/min")])
-        o.parameters.itemByName("circularFaces").value.value = faces
+        setp(o, common + [("tool_feedCutting","180 in/min"), ("tool_feedPlunge","50 in/min")])
+        o.parameters.itemByName("circularFaces").value.value = big_c
+    for tno in sorted(drill_c):
+        faces = [f for f, _ in drill_c[tno]]
+        t = tool_by_number(tno)
+        if t is None:
+            print(f"      ! tool #{tno} not in library - {len(faces)} holes skipped"); continue
+        dia = {x.name: x for x in t.parameters}['tool_diameter'].value.value*10
+        i = setup.operations.createInput("drill"); i.tool = t
+        i.displayName = f"3 Drill {dia:.2f}mm #{tno}"
+        o = setup.operations.add(i)
+        setp(o, common + [("tool_feedPlunge", DRILL_FEED.get(tno, "20 in/min")),
+                          ("cycleType","'chip-breaking'"),
+                          ("peckingDepth", DRILL_PECK.get(tno, "5mm"))])
+        o.parameters.itemByName("holeFaces").value.value = faces
+        # Generate now: if the drill will not produce a toolpath, these holes have
+        # to fall back to boring, and the bore op is created further down - after
+        # this point there is no way to reorder.
+        f2 = cam.generateToolpath(o)
+        for _ in range(400):
+            if f2.isGenerationCompleted: break
+            time.sleep(1)
+        if not o.hasToolpath:
+            borable = [f for f in faces if f.geometry.radius*20 >= BORE_MIN]
+            print(f"      ! drill #{tno} produced no toolpath - falling back to bore "
+                  f"for {len(borable)} of {len(faces)} holes"
+                  + (f", {len(faces)-len(borable)} too small to bore" if len(borable) < len(faces) else ""))
+            o.deleteMe()
+            small_f.extend(borable)
+    if small_f:
+        i = setup.operations.createInput("bore"); i.tool = t_small
+        i.displayName = "3b Bore small 1/8in"
+        o = setup.operations.add(i)
+        setp(o, common + [("tool_feedCutting","125 in/min"), ("tool_feedPlunge","50 in/min")])
+        o.parameters.itemByName("circularFaces").value.value = small_f
     def b2(sel):
         for b in bodies:
             sil = sel.createNewSilhouetteSelection(); sil.inputGeometry = [b]
@@ -205,6 +308,17 @@ def run(_context: str):
     for _ in range(900):
         if fut.isGenerationCompleted: break
         time.sleep(1)
+    # An operation with no toolpath blocks posting for the whole document, and
+    # the error names no culprit. Drop it here and say so.
+    for j in range(setup.operations.count - 1, -1, -1):
+        op = setup.operations.item(j)
+        if not op.hasToolpath:
+            n = op.parameters.itemByName("holeFaces")
+            cnt = len(n.value.value) if n and n.value.value else 0
+            print(f"    *** '{op.name}' produced no toolpath ({cnt} holes) - REMOVED."
+                  f" Those holes are not machined.")
+            op.deleteMe()
+
     print("\n    result:")
     for i in range(setup.operations.count):
         o = setup.operations.item(i)

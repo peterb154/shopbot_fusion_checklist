@@ -29,6 +29,11 @@ state before rebuilding anything.
 | `offsets.py` | Read-only. Per sheet: part span vs machine travel, and the valid range of stock offsets. Run this **before** building - it is what catches a nest that cannot be cut. |
 | `shift.py` | For a sheet that does not fit, names the part at the extreme, the gap next to it, and how far it must move. |
 | `breakdown.py` | Per-operation cycle time, plus hole diameters for the boring ops. Finds where the time actually goes. |
+| `nestcheck.py` | Read-only. Sheets, parts per sheet, span vs travel, bounding-box overlaps and any part on no sheet. Run after re-nesting. |
+| `recentre.py` | Recentres stock offsets where travel is tight and regenerates. |
+| `singlepass.py` | Switches contour ops to a single full-depth pass and reports the time change. |
+| `totals.py` | Cycle time per sheet and per operation, largest first. |
+| `regen.py` | Regenerates any operation that has no toolpath. |
 | `cleanup.py` | Deletes leftover `__trial` operations and reports setup health. Run before posting. |
 
 ## How `buildall.py` decides things
@@ -53,6 +58,18 @@ state before rebuilding anything.
   so the 1/8" tool is used once in the middle: `#4 #4 #4 #6 #4`, two tool
   changes. There is no API to reorder operations, so the script clears and
   rebuilds a setup rather than patching it.
+- **Holes go to whichever bit matches.** Helical-boring is slow - 34s per hole
+  on 18mm stock. A hole that matches a drill you own gets plunged instead:
+  ~2s. `DRILLABLE` maps diameter to tool number; first match wins. Boring is
+  ~3x faster with the 1/4" than the 1/8", so `BIG` is set at 8mm, not 9.
+- **A drill that fails to generate falls back to boring.** Fusion silently
+  refuses to drill on some setups - no warning, just no toolpath. The drill op
+  is generated immediately so the holes can be added to the bore op, which is
+  created later and cannot be reordered afterwards.
+- **Contours cut in a single full-depth pass.** On a compression bit this is the
+  designed use: both the up-cut and down-cut sections engage, giving a clean face
+  top and bottom. Multi-pass is what tears out, because only the first pass
+  touches the top surface. Halves profile time and keeps the finishing pass.
 - **Outer profiles** use a silhouette selection with `OnlyOutsideLoops`. The
   bottom face is the wrong outline on any bevelled part - on some of these it is
   only ~30% of the footprint. `AllLoops` instead warns about lead-in collisions.
