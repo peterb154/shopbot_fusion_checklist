@@ -35,6 +35,7 @@ state before rebuilding anything.
 | `singlepass.py` | Switches contour ops to a single full-depth pass and reports the time change. |
 | `totals.py` | Cycle time per sheet and per operation, largest first. |
 | `regen.py` | Regenerates any operation that has no toolpath. |
+| `real3d.py` | Samples surface normals to separate genuinely sloped faces from vertical extrusion walls. Most NURBS faces in an imported model are walls the profile already cuts - 202 faces looked 3D, 138 actually were. |
 | `flipped.py` | Reports every pocket floor and which way it faces. A floor facing down means the part is placed upside down and would be machined through from the wrong side. Run after any re-nest. |
 | `paramdiff.py` | Diffs every setup parameter between two setups. The tool that found the nanometre stock bug below - when one setup works and another does not, diff them rather than theorise. |
 | `cleanup.py` | Deletes leftover `__trial` operations and reports setup health. Run before posting. |
@@ -91,6 +92,14 @@ state before rebuilding anything.
   designed use: both the up-cut and down-cut sections engage, giving a clean face
   top and bottom. Multi-pass is what tears out, because only the first pass
   touches the top surface. Halves profile time and keeps the finishing pass.
+- **3D bevels are confined by slope angle.** A 3D contour with no
+  `slopeConfinement` re-machines every flat top and vertical wall the 2D
+  operations already cut: 16 min against 1.1 for the same two parts. Confine it
+  to 5-85 degrees from horizontal and it touches only what the 2D passes cannot.
+- **Only include a body whose slope range overlaps what the op will cut.** A face
+  at 86-89 degrees is a near-vertical wall; inside a 5-85 confinement it yields
+  nothing, and one empty body takes the whole batch operation down with it. That
+  is what stopped sheet 4's 3D pass generating at all.
 - **Outer profiles** use a silhouette selection with `OnlyOutsideLoops`. The
   bottom face is the wrong outline on any bevelled part - on some of these it is
   only ~30% of the footprint. `AllLoops` instead warns about lead-in collisions.

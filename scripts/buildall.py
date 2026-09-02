@@ -1,4 +1,4 @@
-import adsk.core, adsk.fusion, adsk.cam, collections, time
+import adsk.core, adsk.fusion, adsk.cam, collections, time, math
 
 TX, TY, R = 2438.4, 1219.2, 3.175
 SHEET_W, SHEET_H = 2440.0, 1220.0     # standard baltic birch
@@ -15,7 +15,8 @@ DRILL_FEED = {7: "40 in/min", 8: "20 in/min"}
 DRILL_PECK = {7: "6mm", 8: "5mm"}
 BORE_MIN  = SMALL_DIA * 1.15       # below this there is no room to helix - must drill
 DRILL_TOL = 0.40                   # hole within this of 3.175mm -> plunge it
-TOOL_BIG, TOOL_SMALL, TOOL_VENT = 4, 6, 7
+TOOL_BIG, TOOL_SMALL, TOOL_VENT, TOOL_3D = 4, 6, 7, 3
+SLOPE_MIN, SLOPE_MAX = 5.0, 85.0   # degrees from horizontal that count as 3D
 FORCE = []                      # sheet indices to rebuild even if already done
 
 def classify(f):
@@ -57,6 +58,38 @@ def setp(holder, pairs):
         if not p: continue
         try: p.expression = v
         except Exception as e: print(f"      ! {k}: {str(e)[:55]}")
+
+def face_slopes(f, n=3):
+    """Angles from horizontal over the face. 0 = flat, 90 = vertical wall.
+    A NURBS face is usually just a vertical extrusion wall, which the outer
+    profile already cuts - sampling is the only way to tell those from real 3D."""
+    t = f.geometry.objectType.split("::")[-1]
+    if t == "Plane":
+        a = math.degrees(math.acos(min(1.0, abs(f.geometry.normal.z))))
+        return [a, a]
+    if t == "Cylinder" and abs(abs(f.geometry.axis.z) - 1.0) < 1e-6:
+        return [90.0, 90.0]
+    ev = f.evaluator
+    rng = ev.parametricRange()
+    if rng is None: return []
+    out = []
+    for i in range(n):
+        for j in range(n):
+            u = rng.minPoint.x + (rng.maxPoint.x - rng.minPoint.x)*(i+0.5)/n
+            v = rng.minPoint.y + (rng.maxPoint.y - rng.minPoint.y)*(j+0.5)/n
+            ok, nv = ev.getNormalAtParameter(adsk.core.Point2D.create(u, v))
+            if ok: out.append(math.degrees(math.acos(min(1.0, abs(nv.z)))))
+    return out
+
+def is_sloped(b):
+    """True only if some face overlaps the range the operation will actually cut.
+    A face at 86-89deg is a near-vertical wall: inside the op's slope confinement
+    it yields nothing, and an empty body in the batch can take the whole
+    operation down with it."""
+    for f in b.faces:
+        sl = face_slopes(f)
+        if sl and max(sl) >= SLOPE_MIN and min(sl) <= SLOPE_MAX: return True
+    return False
 
 def true_normal(f):
     """Outward normal of the FACE. f.geometry.normal is the underlying surface's
@@ -187,13 +220,14 @@ def run(_context: str):
     print(f"    stock {s['th']:.0f}mm -> stepdown {stepdown}mm, single pass")
 
     names = {m.name for m in setup.models}
-    bodies, cutouts, big_c, small_c, tiny_c, floors = [], [], [], [], [], []
+    bodies, cutouts, big_c, small_c, tiny_c, floors, sloped = [], [], [], [], [], [], []
     drill_c = collections.defaultdict(list)
     for occ in des.rootComponent.allOccurrences:
         if occ.name not in names: continue
         for b in occ.bRepBodies:
             if not b.isSolid: continue
             bodies.append(b)
+            if is_sloped(b): sloped.append((b, occ.name.split(':')[0].strip()))
             _,_,_,_, zb, zt = extents(b)
             pl = [f for f in b.faces if f.geometry.objectType == adsk.core.Plane.classType()
                   and abs(abs(f.geometry.normal.z)-1.0) < 1e-6]
@@ -349,6 +383,57 @@ def run(_context: str):
         o = setup.operations.add(i)
         setp(o, common + [("tool_feedCutting","125 in/min"), ("tool_feedPlunge","50 in/min")])
         o.parameters.itemByName("circularFaces").value.value = small_f
+    if sloped:
+        t3 = tool_by_number(TOOL_3D)
+        if t3 is None:
+            print(f"      ! tool #{TOOL_3D} missing - {len(sloped)} sloped parts not finished")
+        else:
+            def make_3d(bs, name):
+                i = setup.operations.createInput("contour3d"); i.tool = t3
+                i.displayName = name
+                o = setup.operations.add(i)
+                setp(o, common + [("tool_feedCutting","90 in/min"),
+                                  ("tool_feedPlunge","45 in/min"),
+                                  ("maximumStepdown","0.04in"), ("tolerance","0.05mm"),
+                                  ("boundaryMode","'selection'"),
+                                  ("boundaryContainment","'inside'"),
+                                  # Without this it re-machines every flat top and
+                                  # vertical wall the 2D ops already cut: 16min vs 1.1
+                                  ("slopeConfinement","true"),
+                                  ("slopeAngleFrom", f"{SLOPE_MIN}deg"),
+                                  ("slopeAngleTo", f"{SLOPE_MAX}deg")])
+                cv = o.parameters.itemByName("machiningBoundarySel").value
+                sel = cv.getCurveSelections(); sel.clear()
+                for b in bs:
+                    sil = sel.createNewSilhouetteSelection(); sil.inputGeometry = [b]
+                    sil.loopType = adsk.cam.LoopTypes.OnlyOutsideLoops
+                cv.applyCurveSelections(sel)
+                f3 = cam.generateToolpath(o)
+                for _ in range(600):
+                    if f3.isGenerationCompleted: break
+                    time.sleep(1)
+                return o
+            print(f"      3D bevels on {len(sloped)}: "
+                  f"{', '.join(sorted({n for _, n in sloped}))}")
+            o = make_3d([b for b, _ in sloped], "3c Bevels 3D tapered ball")
+            if not o.hasToolpath:
+                o.deleteMe()
+                good, bad = [], []
+                for b, nm in sloped:
+                    probe = make_3d([b], "__probe 3d")
+                    (good if probe.hasToolpath else bad).append((b, nm))
+                    probe.deleteMe()
+                print(f"      ! 3D batch failed - {len(good)} of {len(sloped)} "
+                      f"bodies generate individually")
+                for _, nm in bad:
+                    print(f"          NOT FINISHED: {nm}")
+                if good:
+                    o2 = make_3d([b for b, _ in good], "3c Bevels 3D tapered ball")
+                    if not o2.hasToolpath:
+                        o2.deleteMe()
+                        for b, nm in good:
+                            make_3d([b], f"3c Bevel {nm[:18]}")
+
     def b2(sel):
         for b in bodies:
             sil = sel.createNewSilhouetteSelection(); sil.inputGeometry = [b]
