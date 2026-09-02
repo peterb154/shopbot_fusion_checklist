@@ -2,29 +2,27 @@
     "data": [
         {
             "BMC": "carbide",
-            "GRADE": "Mill Generic",
+            "GRADE": "generic",
             "description": "0.1875 (3/16) DIA X    90 deg inc Spot Drill",
-            "expressions": {
-                "tool_bodyLength": "2.5\"",
-                "tool_description": "'0.1875 (3/16) DIA X    90 deg inc Spot Drill'",
-                "tool_diameter": "3/16\"",
-                "tool_fluteLength": "2.25\"",
-                "tool_overallLength": "3.5 in",
-                "tool_shoulderLength": "2.25\""
-            },
             "geometry": {
                 "CSP": false,
-                "DC": 0.1875,
+                "DC": 0.18749999999999997,
                 "HAND": true,
                 "LB": 2.5,
                 "LCF": 2.25,
                 "NOF": 2,
-                "OAL": 3.5,
-                "SFDM": 0.1875,
+                "NT": 1,
+                "OAL": 3.4999999999999996,
+                "RE": 0,
+                "SFDM": 0.18749999999999997,
                 "SIG": 90,
+                "TP": 0,
                 "assemblyGaugeLength": 2.5,
                 "shoulder-length": 2.25,
-                "tip-diameter": 0
+                "thread-profile-angle": 60,
+                "tip-diameter": 0,
+                "tip-length": 0,
+                "tip-offset": 0
             },
             "guid": "775b72d1-9e8d-4d31-8460-e79ec38825e4",
             "post-process": {
@@ -46,7 +44,7 @@
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
-                        "f_z": 0.00140607424071991,
+                        "f_z": 0.0014060742407199108,
                         "guid": "b3393ddd-039e-4193-8d52-529b9406fe52",
                         "material": {
                             "category": "all",
@@ -57,14 +55,14 @@
                         "name": "Default preset",
                         "tool-coolant": "flood",
                         "use-feed-per-revolution": false,
-                        "v_c": 687.223392972767,
-                        "v_f": 39.37007874015748,
-                        "v_f_leadIn": 39.37007874015748,
-                        "v_f_leadOut": 39.37007874015748,
-                        "v_f_plunge": 13.123359580052496,
-                        "v_f_ramp": 13.123359580052496,
-                        "v_f_retract": 13.123359580052496,
-                        "v_f_transition": 39.37007874015748
+                        "v_c": 687.2233929727671,
+                        "v_f": 39.3700787401575,
+                        "v_f_leadIn": 39.3700787401575,
+                        "v_f_leadOut": 39.3700787401575,
+                        "v_f_plunge": 13.1233595800525,
+                        "v_f_ramp": 13.1233595800525,
+                        "v_f_retract": 13.1233595800525,
+                        "v_f_transition": 39.3700787401575
                     }
                 ]
             },
@@ -225,16 +223,8 @@
         },
         {
             "BMC": "carbide",
-            "GRADE": "Mill Generic",
+            "GRADE": "generic",
             "description": "0.21875 (7/32) DIA X    90 deg inc Spot Drill",
-            "expressions": {
-                "tool_bodyLength": "2.5\"",
-                "tool_description": "'0.21875 (7/32) DIA X    90 deg inc Spot Drill'",
-                "tool_diameter": "(7/32) in",
-                "tool_fluteLength": "2.25\"",
-                "tool_overallLength": "3.5 in",
-                "tool_shoulderLength": "2.25\""
-            },
             "geometry": {
                 "CSP": false,
                 "DC": 0.21875,
@@ -242,12 +232,18 @@
                 "LB": 2.5,
                 "LCF": 2.25,
                 "NOF": 2,
-                "OAL": 3.5,
+                "NT": 1,
+                "OAL": 3.4999999999999996,
+                "RE": 0,
                 "SFDM": 0.21875,
                 "SIG": 90,
+                "TP": 0,
                 "assemblyGaugeLength": 2.5,
                 "shoulder-length": 2.25,
-                "tip-diameter": 0
+                "thread-profile-angle": 60,
+                "tip-diameter": 0,
+                "tip-length": 0,
+                "tip-offset": 0
             },
             "guid": "1d62741f-df8c-42bd-bac6-63946d69907b",
             "post-process": {
@@ -269,7 +265,7 @@
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
-                        "f_z": 0.00140607424071991,
+                        "f_z": 0.0014060742407199108,
                         "guid": "b3393ddd-039e-4193-8d52-529b9406fe52",
                         "material": {
                             "category": "all",
@@ -280,14 +276,14 @@
                         "name": "Default preset",
                         "tool-coolant": "flood",
                         "use-feed-per-revolution": false,
-                        "v_c": 801.760625134895,
-                        "v_f": 39.37007874015748,
-                        "v_f_leadIn": 39.37007874015748,
-                        "v_f_leadOut": 39.37007874015748,
-                        "v_f_plunge": 13.123359580052496,
-                        "v_f_ramp": 13.123359580052496,
-                        "v_f_retract": 13.123359580052496,
-                        "v_f_transition": 39.37007874015748
+                        "v_c": 801.7606251348951,
+                        "v_f": 39.3700787401575,
+                        "v_f_leadIn": 39.3700787401575,
+                        "v_f_leadOut": 39.3700787401575,
+                        "v_f_plunge": 13.1233595800525,
+                        "v_f_ramp": 13.1233595800525,
+                        "v_f_retract": 13.1233595800525,
+                        "v_f_transition": 39.3700787401575
                     }
                 ]
             },
@@ -297,22 +293,28 @@
         },
         {
             "BMC": "carbide",
+            "GRADE": "Mill Generic",
             "description": "SpeTool W02003 SC Compression Spiral 1/4\" Dia x 1/4\" Shank x 1\" Cutting Length x 2-1/2\" Long 2 Flute Router Bit",
-            "expressions": {
-                "tool_description": "'SpeTool W02003 SC Compression Spiral 1/4\" Dia x 1/4\" Shank x 1\" Cutting Length x 2-1/2\" Long 2 Flute Router Bit'"
-            },
             "geometry": {
                 "CSP": false,
-                "DC": 0.25,
+                "DC": 0.24999999999999997,
                 "HAND": true,
                 "LB": 1.1,
                 "LCF": 1,
                 "NOF": 2,
+                "NT": 1,
                 "OAL": 2.5,
-                "SFDM": 0.25,
+                "RE": 0,
+                "SFDM": 0.24999999999999997,
+                "TA": 0,
+                "TP": 0,
                 "assemblyGaugeLength": 1.1,
-                "shoulder-diameter": 0.25,
-                "shoulder-length": 1
+                "shoulder-diameter": 0.24999999999999997,
+                "shoulder-length": 1,
+                "thread-profile-angle": 60,
+                "tip-diameter": 0.24999999999999997,
+                "tip-length": 0,
+                "tip-offset": 0
             },
             "guid": "96639c48-eeca-49ce-8571-c06637cc1aee",
             "post-process": {
@@ -330,11 +332,12 @@
             "start-values": {
                 "presets": [
                     {
+                        "description": "",
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
-                        "f_n": 0.006190471428571428,
-                        "f_z": 0.009285714285714284,
+                        "f_n": 0.006190471428571429,
+                        "f_z": 0.009285714285714286,
                         "guid": "fb90b5d5-3433-4092-87b9-b1d8346e3330",
                         "material": {
                             "category": "all",
@@ -350,7 +353,7 @@
                         "tool-coolant": "flood",
                         "use-stepdown": true,
                         "use-stepover": true,
-                        "v_c": 916.297857297023,
+                        "v_c": 916.2978572970228,
                         "v_f": 260,
                         "v_f_leadIn": 260,
                         "v_f_leadOut": 260,
@@ -359,11 +362,12 @@
                         "v_f_transition": 260
                     },
                     {
+                        "description": "",
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
                         "f_n": 0.005238092857142856,
-                        "f_z": 0.007857142857142856,
+                        "f_z": 0.007857142857142858,
                         "guid": "97d30450-e571-4242-80fa-0d61a68728aa",
                         "material": {
                             "category": "all",
@@ -379,7 +383,7 @@
                         "tool-coolant": "flood",
                         "use-stepdown": true,
                         "use-stepover": true,
-                        "v_c": 916.297857297023,
+                        "v_c": 916.2978572970228,
                         "v_f": 220,
                         "v_f_leadIn": 220,
                         "v_f_leadOut": 220,
@@ -388,11 +392,12 @@
                         "v_f_transition": 220
                     },
                     {
+                        "description": "",
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
                         "f_n": 0.004285714285714286,
-                        "f_z": 0.006428571428571428,
+                        "f_z": 0.0064285714285714285,
                         "guid": "88675a6a-fb3f-4326-9917-e0f2e05a76d3",
                         "material": {
                             "category": "all",
@@ -408,7 +413,7 @@
                         "tool-coolant": "flood",
                         "use-stepdown": true,
                         "use-stepover": true,
-                        "v_c": 916.297857297023,
+                        "v_c": 916.2978572970228,
                         "v_f": 180,
                         "v_f_leadIn": 180,
                         "v_f_leadOut": 180,
@@ -424,22 +429,28 @@
         },
         {
             "BMC": "carbide",
+            "GRADE": "Mill Generic",
             "description": "SpeTool W04013 SC Spiral Plunge 1/4\" Dia x 1/4\" Shank x 1-1/4\" Cutting Length 3\" Extra Long 2 Flute Down-Cut Router Bit",
-            "expressions": {
-                "tool_description": "'SpeTool W04013 SC Spiral Plunge 1/4\" Dia x 1/4\" Shank x 1-1/4\" Cutting Length 3\" Extra Long 2 Flute Down-Cut Router Bit'"
-            },
             "geometry": {
                 "CSP": false,
-                "DC": 0.25,
+                "DC": 0.24999999999999997,
                 "HAND": true,
                 "LB": 2,
                 "LCF": 1.25,
                 "NOF": 2,
-                "OAL": 3,
-                "SFDM": 0.25,
+                "NT": 1,
+                "OAL": 2.9999999999999996,
+                "RE": 0,
+                "SFDM": 0.24999999999999997,
+                "TA": 0,
+                "TP": 0,
                 "assemblyGaugeLength": 2,
-                "shoulder-diameter": 0.25,
-                "shoulder-length": 1.25
+                "shoulder-diameter": 0.24999999999999997,
+                "shoulder-length": 1.25,
+                "thread-profile-angle": 60,
+                "tip-diameter": 0.24999999999999997,
+                "tip-length": 0,
+                "tip-offset": 0
             },
             "guid": "54d15221-c954-49b3-8a94-69ad457a31a6",
             "post-process": {
@@ -457,10 +468,11 @@
             "start-values": {
                 "presets": [
                     {
+                        "description": "",
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
-                        "f_n": 0.005476185714285714,
+                        "f_n": 0.0054761857142857145,
                         "f_z": 0.008214285714285714,
                         "guid": "feeef7e7-06ce-496e-b07a-6bfa69d373b9",
                         "material": {
@@ -477,7 +489,7 @@
                         "tool-coolant": "flood",
                         "use-stepdown": true,
                         "use-stepover": true,
-                        "v_c": 916.297857297023,
+                        "v_c": 916.2978572970228,
                         "v_f": 230,
                         "v_f_leadIn": 230,
                         "v_f_leadOut": 230,
@@ -486,11 +498,12 @@
                         "v_f_transition": 230
                     },
                     {
+                        "description": "",
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
                         "f_n": 0.0047619,
-                        "f_z": 0.007142857142857142,
+                        "f_z": 0.007142857142857143,
                         "guid": "ce1eec8a-276d-4ad7-bb17-203e69af76f1",
                         "material": {
                             "category": "all",
@@ -506,7 +519,7 @@
                         "tool-coolant": "flood",
                         "use-stepdown": true,
                         "use-stepover": true,
-                        "v_c": 916.297857297023,
+                        "v_c": 916.2978572970228,
                         "v_f": 200,
                         "v_f_leadIn": 200,
                         "v_f_leadOut": 200,
@@ -515,6 +528,7 @@
                         "v_f_transition": 200
                     },
                     {
+                        "description": "",
                         "expressions": {
                             "tool_spindleSpeed": "14000 rpm"
                         },
@@ -535,7 +549,7 @@
                         "tool-coolant": "flood",
                         "use-stepdown": true,
                         "use-stepover": true,
-                        "v_c": 916.297857297023,
+                        "v_c": 916.2978572970228,
                         "v_f": 145,
                         "v_f_leadIn": 145,
                         "v_f_leadOut": 145,
@@ -548,6 +562,147 @@
             "type": "flat end mill",
             "unit": "inches",
             "vendor": "SpeTool"
+        },
+        {
+            "BMC": "carbide",
+            "GRADE": "Mill Generic",
+            "description": "3-Flute Upcut Spiral Router Bit 1/8\" Dia x 1/4\" Shank x 1-1/4\" Cutting Length x 2-1/2\" Long, nACo Blue Nano Coated Carbide",
+            "expressions": {
+                "tool_description": "'3-Flute Upcut Spiral Router Bit 1/8\" Dia x 1/4\" Shank x 1-1/4\" Cutting Length x 2-1/2\" Long, nACo Blue Nano Coated Carbide'"
+            },
+            "geometry": {
+                "CSP": false,
+                "DC": 0.125,
+                "HAND": true,
+                "LB": 1.7499999999999998,
+                "LCF": 1.25,
+                "NOF": 3,
+                "NT": 1,
+                "OAL": 2.5,
+                "RE": 0,
+                "SFDM": 0.24999999999999997,
+                "TA": 0,
+                "TP": 0,
+                "assemblyGaugeLength": 1.7499999999999998,
+                "shoulder-diameter": 0.125,
+                "shoulder-length": 1.25,
+                "thread-profile-angle": 60,
+                "tip-diameter": 0.125,
+                "tip-length": 0,
+                "tip-offset": 0
+            },
+            "guid": "d00c5589-dbae-476c-9426-f6d3c6f741ae",
+            "last_modified": 1788364037578,
+            "post-process": {
+                "break-control": false,
+                "comment": "",
+                "diameter-offset": 6,
+                "length-offset": 6,
+                "live": true,
+                "manual-tool-change": false,
+                "number": 6,
+                "turret": 0
+            },
+            "product-id": "",
+            "product-link": "",
+            "reference_guid": "125f1dea-d18c-451b-96d8-8759c3185675",
+            "start-values": {
+                "presets": [
+                    {
+                        "description": "",
+                        "expressions": {
+                            "tool_spindleSpeed": "14000 rpm"
+                        },
+                        "f_n": 0.003809521428571429,
+                        "f_z": 0.0038095238095238095,
+                        "guid": "7108f8a4-ba96-4da5-83a0-4f5f9eaba122",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 14000,
+                        "n_ramp": 14000,
+                        "name": "MDF/Laminate",
+                        "ramp-angle": 2,
+                        "stepdown": 0.125,
+                        "stepover": 0.05,
+                        "tool-coolant": "flood",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 458.1489286485114,
+                        "v_f": 160,
+                        "v_f_leadIn": 160,
+                        "v_f_leadOut": 160,
+                        "v_f_plunge": 53.3333,
+                        "v_f_ramp": 53.3333,
+                        "v_f_transition": 160
+                    },
+                    {
+                        "description": "",
+                        "expressions": {
+                            "tool_spindleSpeed": "14000 rpm"
+                        },
+                        "f_n": 0.003452378571428571,
+                        "f_z": 0.0034523809523809524,
+                        "guid": "f4839822-c6a3-4469-bbd8-0962afd8617b",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 14000,
+                        "n_ramp": 14000,
+                        "name": "SOFTWOOD",
+                        "ramp-angle": 2,
+                        "stepdown": 0.125,
+                        "stepover": 0.05,
+                        "tool-coolant": "flood",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 458.1489286485114,
+                        "v_f": 145,
+                        "v_f_leadIn": 145,
+                        "v_f_leadOut": 145,
+                        "v_f_plunge": 48.3333,
+                        "v_f_ramp": 48.3333,
+                        "v_f_transition": 145
+                    },
+                    {
+                        "description": "",
+                        "expressions": {
+                            "tool_spindleSpeed": "14000 rpm"
+                        },
+                        "f_n": 0.002976192857142857,
+                        "f_z": 0.002976190476190476,
+                        "guid": "ca182c70-efb1-447a-8ddd-ac34b2517806",
+                        "material": {
+                            "category": "all",
+                            "query": "",
+                            "use-hardness": false
+                        },
+                        "n": 14000,
+                        "n_ramp": 14000,
+                        "name": "PLYWOOD/HARDWOOD",
+                        "ramp-angle": 2,
+                        "stepdown": 0.125,
+                        "stepover": 0.05,
+                        "tool-coolant": "flood",
+                        "use-stepdown": true,
+                        "use-stepover": true,
+                        "v_c": 458.1489286485114,
+                        "v_f": 125,
+                        "v_f_leadIn": 125,
+                        "v_f_leadOut": 125,
+                        "v_f_plunge": 41.6667,
+                        "v_f_ramp": 41.6667,
+                        "v_f_transition": 125
+                    }
+                ]
+            },
+            "type": "flat end mill",
+            "unit": "inches",
+            "vendor": ""
         }
     ],
     "version": 36
