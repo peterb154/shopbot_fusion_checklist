@@ -58,6 +58,21 @@ def setp(holder, pairs):
         try: p.expression = v
         except Exception as e: print(f"      ! {k}: {str(e)[:55]}")
 
+def true_normal(f):
+    """Outward normal of the FACE. f.geometry.normal is the underlying surface's
+    normal and points the wrong way when the face parameterisation is reversed."""
+    ev = f.evaluator
+    ok, prm = ev.getParameterAtPoint(f.pointOnFace)
+    if not ok: return None
+    ok2, n = ev.getNormalAtParameter(prm)
+    return n if ok2 else None
+
+def face_z(f):
+    """Mean Z of the face's vertices. NEVER use f.boundingBox for this - on a
+    rotated occurrence it is the transformed AABB and can land outside the body."""
+    zs = [v.geometry.z*10 for v in f.vertices]
+    return sum(zs)/len(zs) if zs else None
+
 def extents(b):
     xs=[v.geometry.x*10 for v in b.vertices]; ys=[v.geometry.y*10 for v in b.vertices]
     zs=[v.geometry.z*10 for v in b.vertices]
@@ -182,19 +197,27 @@ def run(_context: str):
             _,_,_,_, zb, zt = extents(b)
             pl = [f for f in b.faces if f.geometry.objectType == adsk.core.Plane.classType()
                   and abs(abs(f.geometry.normal.z)-1.0) < 1e-6]
-            for f in pl:
-                fz = f.boundingBox.minPoint.z*10
-                if zb + 0.1 < fz < zt - 0.1: floors.append(f)
-            if pl:
-                bot = min(pl, key=lambda f: f.boundingBox.minPoint.z)
-                ls = list(bot.loops)
-                outer = max(ls, key=lambda L: sum(e.length for e in L.edges))
-                for L in ls:
-                    if L is outer: continue
-                    edges = list(L.edges)
-                    ks = {e.geometry.objectType.split('::')[-1] for e in edges}
-                    if len(edges) <= 2 and ks <= {"Circle3D","Arc3D"}: continue
-                    cutouts.append(edges)
+            planar = [(f, face_z(f), true_normal(f)) for f in pl]
+            planar = [t for t in planar if t[1] is not None and t[2] is not None]
+            for f, fz, n in planar:
+                # a pocket must open upward, or it is on the underside and the
+                # part is placed upside down
+                if n.z > 0 and zb + 0.1 < fz < zt - 0.1: floors.append(f)
+            if planar:
+                # The underside can be several coplanar faces - INST PNL UPR has
+                # three. Taking only one of them silently drops that part's
+                # cutouts, so gather from all of them. Fusion's isOuter marks each
+                # face's own boundary; guessing by perimeter gets it wrong when a
+                # face is a fragment rather than the whole underside.
+                zmin = min(t[1] for t in planar)
+                bots = [f for f, fz, n in planar if abs(fz - zmin) < 0.05 and n.z < 0]
+                for bot in bots:
+                    for L in bot.loops:
+                        if L.isOuter: continue
+                        edges = list(L.edges)
+                        ks = {e.geometry.objectType.split('::')[-1] for e in edges}
+                        if len(edges) <= 2 and ks <= {"Circle3D","Arc3D"}: continue
+                        cutouts.append(edges)
             for f in b.faces:
                 g = f.geometry
                 if g.objectType != adsk.core.Cylinder.classType(): continue
@@ -245,18 +268,42 @@ def run(_context: str):
         return o
 
     if floors:
-        i = setup.operations.createInput("pocket2d"); i.tool = t_big
-        i.displayName = "0 Pockets 1/4in"
-        o = setup.operations.add(i)
-        setp(o, common[:2] + [("tool_feedCutting","180 in/min"),("tool_feedPlunge","60 in/min"),
-                              ("tolerance","0.1mm"),("doMultipleDepths","true"),
-                              ("maximumStepdown","3mm"),("useStockToLeave","true"),
-                              ("stockToLeave","0.02in")])
-        cv = o.parameters.itemByName("pockets").value
-        sel = cv.getCurveSelections(); sel.clear()
-        for f in floors:
-            ps = sel.createNewPocketSelection(); ps.inputGeometry = [f]
-        cv.applyCurveSelections(sel)
+        def make_pocket(faces, name):
+            i = setup.operations.createInput("pocket2d"); i.tool = t_big
+            i.displayName = name
+            o = setup.operations.add(i)
+            setp(o, common[:2] + [("tool_feedCutting","180 in/min"),("tool_feedPlunge","60 in/min"),
+                                  ("tolerance","0.1mm"),("doMultipleDepths","true"),
+                                  ("maximumStepdown","3mm"),("useStockToLeave","true"),
+                                  ("stockToLeave","0.02in")])
+            cv = o.parameters.itemByName("pockets").value
+            sel = cv.getCurveSelections(); sel.clear()
+            for f in faces:
+                ps = sel.createNewPocketSelection(); ps.inputGeometry = [f]
+            cv.applyCurveSelections(sel)
+            fut2 = cam.generateToolpath(o)
+            for _ in range(400):
+                if fut2.isGenerationCompleted: break
+                time.sleep(1)
+            return o
+        # One floor Fusion refuses takes the whole operation down with it, and the
+        # other pockets go unmachined without a word. Test the batch, and on
+        # failure keep whatever generates. Done before the later ops exist, so the
+        # replacement still lands first in the order.
+        o = make_pocket(floors, "0 Pockets 1/4in")
+        if not o.hasToolpath:
+            o.deleteMe()
+            good, bad = [], []
+            for f in floors:
+                probe = make_pocket([f], "__probe pocket")
+                (good if probe.hasToolpath else bad).append(f)
+                probe.deleteMe()
+            print(f"      ! pocket batch failed - {len(good)} of {len(floors)} floors "
+                  f"generate individually")
+            for f in bad:
+                print(f"          NOT MACHINED: floor of {f.area*100:.1f} mm2")
+            if good:
+                make_pocket(good, "0 Pockets 1/4in")
     if cutouts:
         def b1(sel):
             for edges in cutouts:

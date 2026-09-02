@@ -35,6 +35,7 @@ state before rebuilding anything.
 | `singlepass.py` | Switches contour ops to a single full-depth pass and reports the time change. |
 | `totals.py` | Cycle time per sheet and per operation, largest first. |
 | `regen.py` | Regenerates any operation that has no toolpath. |
+| `flipped.py` | Reports every pocket floor and which way it faces. A floor facing down means the part is placed upside down and would be machined through from the wrong side. Run after any re-nest. |
 | `paramdiff.py` | Diffs every setup parameter between two setups. The tool that found the nanometre stock bug below - when one setup works and another does not, diff them rather than theorise. |
 | `cleanup.py` | Deletes leftover `__trial` operations and reports setup health. Run before posting. |
 
@@ -53,6 +54,17 @@ state before rebuilding anything.
   lands on 2 even passes with breakthrough. 12mm gives 6.4mm, 18mm gives 9.4mm.
   Fusion rounds pass count up, so a stepdown fractionally under `depth/N` costs a
   whole extra pass.
+- **Pocket floors must face up.** A horizontal plane partway through a part is
+  not enough - check the true face normal points +Z. A downward-facing floor
+  means the part is upside down on the sheet, and machining it from the top cuts
+  straight through. Use `f.evaluator.getNormalAtParameter`, not
+  `f.geometry.normal`: the latter is the underlying surface's normal and points
+  the wrong way whenever the face parameterisation is reversed.
+- **A part's underside can be several coplanar faces.** INST PNL UPR has three.
+  Taking only the lowest one drops that part's cutouts - it had 2 loops where the
+  real underside has 20. Gather from every face at the minimum Z, and use
+  `loop.isOuter` to tell a face's own boundary from a cutout rather than guessing
+  by perimeter.
 - **Feature classification** is by edge type, not bounding box. A face whose
   loops contain any `Line3D` is a pocket corner fillet, not a hole. Bounding
   boxes on rotated occurrences are the transformed AABB and are inflated - never
