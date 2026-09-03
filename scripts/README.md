@@ -40,6 +40,7 @@ state before rebuilding anything.
 | `why3d.py` | For one sheet, every face that pulled a part into the 3D pass, with type, slope and area. Answers "why is it cutting a bevel there?" - which is how the angled-hole bug was found. |
 | `reach.py` | Concave radii on sloped faces against the ball radius of the tool, so you know before cutting which corners the tool cannot enter. |
 | `real3d.py` | Samples surface normals to separate genuinely sloped faces from vertical extrusion walls. Most NURBS faces in an imported model are walls the profile already cuts - 202 faces looked 3D, 138 actually were. |
+| `audit3d.py` | **Run this before cutting.** Every part with any 3D candidate geometry, and where each square millimetre went: machinable, facing down, angled hole, no vertical extent - plus a verdict per part. One table instead of discovering problems one rebuild at a time. |
 | `facedown.py` | Sloped area facing up vs down, per part. A part whose bevels all face down is upside down on the sheet - the spindle can never reach them. `flipped.py` only ever checked planar pocket floors and missed this entirely. |
 | `verify3d.py` | Posts each 3D pass and buckets every move by part. The only way to know a 3D op cuts what it claims - bucket against the operation's OWN parts, since nested part bounding boxes overlap. |
 | `facemax.py` | Largest single sloped face per part. Separates a real surface from a notch facet. |
