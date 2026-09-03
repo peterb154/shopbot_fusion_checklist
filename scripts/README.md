@@ -26,6 +26,7 @@ state before rebuilding anything.
 |---|---|
 | `buildall.py` | The main event. Discovers sheets, works out stock offsets, creates one setup per sheet and builds its operations. Builds **one sheet per invocation**, so run it repeatedly until it says `nothing left to build`. |
 | `status.py` | Read-only. Every setup, its offsets, operations, tool numbers, and whether the cutter stays inside machine travel. |
+| `truetravel.py` | Travel envelope from TRUE vertices. Fusion's own `surfaceX/Y` are bounding boxes and inflate badly on rotated parts - one was 105mm out - so its "Depth (Y) less than the depth of the selected model" warning fires on nests that fit fine. Trust this, not the warning. |
 | `offsets.py` | Read-only. Per sheet: part span vs machine travel, and the valid range of stock offsets. Run this **before** building - it is what catches a nest that cannot be cut. |
 | `shift.py` | For a sheet that does not fit, names the part at the extreme, the gap next to it, and how far it must move. |
 | `breakdown.py` | Per-operation cycle time, plus hole diameters for the boring ops. Finds where the time actually goes. |
@@ -113,6 +114,11 @@ state before rebuilding anything.
   does not clear the underside until the point is one tip-length past it: 0.95mm
   for a 118-degree 1/8in, 1.67mm for a 7/32in. The -0.02in that suits an endmill
   leaves a cone of uncut material. Derived from `tool_tipAngle`.
+- **Fusion's own extents are bounding boxes too.** `surfaceXHigh` and friends
+  inflate on rotated occurrences - after flipping four parts, one box was 105mm
+  larger than the part in Y, and every operation on that sheet raised "Depth (Y)
+  less than the depth of the selected model". The real geometry had 12.8mm of
+  travel to spare. Check with `truetravel.py` before believing it.
 - **Never take `abs()` of a face normal's Z.** A 59-degree bevel facing DOWN
   scores identically to one facing up, so an upside-down part gets a toolpath for
   geometry the spindle cannot reach, with no warning. Keep the sign and require

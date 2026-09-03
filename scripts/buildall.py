@@ -25,10 +25,11 @@ CUSP_MM = 0.083
 HOLE_R_MM   = 5.0    # a non-vertical cylinder this small is an angled HOLE, not a
                      # surface - 3-axis cannot make it and it must not drag a part
                      # into a 3D pass
-MIN_3D_AREA  = 100.0   # mm2 of genuinely sloped surface before a part earns a pass
-MIN_3D_FACE  = 500.0   # ...or one face this big. A notch facet is not a bevel.
-MIN_3D_COUNT = 8       # ...or this many small ones (an edge treatment)
-MIN_3D_GROUP = 800.0   # ...totalling this much
+# Size is a poor filter: a 383mm2 mitred end and a 492mm2 pair of beveled slots
+# are real features, while a 100mm2 face with no vertical extent is not geometry
+# at all. Filter on what makes a bevel unmachinable - facing down, no vertical
+# extent, or being an angled hole - and keep only a floor for numerical noise.
+MIN_3D_AREA   = 50.0   # mm2 total of reachable bevel before a part earns a pass
 MIN_FACE_DROP = 0.5    # a face with no vertical extent cannot be a bevel
 FORCE = []                      # sheet indices to rebuild even if already done
 
@@ -161,12 +162,7 @@ def sloped_area(b):
     return sum(sloped_faces(b)[0])
 
 def is_sloped(b):
-    """One substantial surface, or a genuine cluster of small ones. A single
-    small facet at a notch is neither."""
-    areas, _ = sloped_faces(b)
-    if not areas: return False
-    if max(areas) >= MIN_3D_FACE: return True
-    return len(areas) >= MIN_3D_COUNT and sum(areas) >= MIN_3D_GROUP
+    return sum(sloped_faces(b)[0]) >= MIN_3D_AREA
 
 def true_normal(f):
     """Outward normal of the FACE. f.geometry.normal is the underlying surface's
