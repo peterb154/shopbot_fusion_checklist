@@ -164,6 +164,37 @@ def sloped_area(b):
 def is_sloped(b):
     return sum(sloped_faces(b)[0]) >= MIN_3D_AREA
 
+def top_circle_edge(f):
+    """Highest circular edge of a cylindrical hole face, so the hole can be cut as
+    a contour. A helical BORE is linearised by the ShopBot post into ~0.001mm Z
+    steps - one operation came out 636,208 moves and 19MB. The same holes cut as
+    circles at discrete depths post as arcs: 101K and 4.4 min against 24.3."""
+    best = None
+    for L in f.loops:
+        for e in L.edges:
+            if e.geometry.objectType != adsk.core.Circle3D.classType(): continue
+            z = e.boundingBox.maxPoint.z
+            if best is None or z > best[0]: best = (z, e)
+    return best[1] if best else None
+
+def top_outer_loop(b):
+    """Edges of the outer loop of the body's top face, for a 3D machining
+    boundary. A SilhouetteSelection is accepted by machiningBoundarySel and then
+    silently ignored - Fusion scans the whole model instead. Chains are honoured."""
+    zs = [v.geometry.z*10 for v in b.vertices]
+    zt = max(zs)
+    best = None
+    for f in b.faces:
+        if f.geometry.objectType != adsk.core.Plane.classType(): continue
+        if abs(abs(f.geometry.normal.z) - 1.0) > 1e-6: continue
+        fz = [v.geometry.z*10 for v in f.vertices]
+        if not fz or abs(sum(fz)/len(fz) - zt) > 0.05: continue
+        if best is None or f.area > best.area: best = f
+    if best is None: return None
+    for L in best.loops:
+        if L.isOuter: return list(L.edges)
+    return None
+
 def true_normal(f):
     """Outward normal of the FACE. f.geometry.normal is the underlying surface's
     normal and points the wrong way when the face parameterisation is reversed."""
@@ -369,7 +400,8 @@ def run(_context: str):
                      ("tolerance","0.1mm"), ("doMultipleDepths","true"),
                      ("maximumStepdown", f"{stepdown}mm"), ("doRoughingPasses","true"),
                      ("maximumStepover","0.1in"), ("useStockToLeave","true"),
-                     ("stockToLeave","0.02in"), ("compensation","'left'")]
+                     ("stockToLeave","0.02in"), ("verticalStockToLeave","0mm"),
+                     ("compensation","'left'")]
 
     small_f = [f for f, _ in small_c]
 
@@ -423,12 +455,28 @@ def run(_context: str):
                 c = sel.createNewChainSelection(); c.inputGeometry = edges
                 c.sideType = adsk.cam.SideTypes.AlwaysInsideSideType
         contour("1 Inner cutouts 1/4in", b1)
-    if big_c:
-        i = setup.operations.createInput("bore"); i.tool = t_big
-        i.displayName = "2 Bore large 1/4in"
+    def hole_contour(faces, tool, label, feed):
+        edges = [e for e in (top_circle_edge(f) for f in faces) if e is not None]
+        if not edges:
+            print(f"      ! {label}: no circular edges found for {len(faces)} holes")
+            return
+        if len(edges) < len(faces):
+            print(f"      ! {label}: {len(faces)-len(edges)} of {len(faces)} holes "
+                  f"had no circular edge and are NOT machined")
+        i = setup.operations.createInput("contour2d"); i.tool = tool
+        i.displayName = label
         o = setup.operations.add(i)
-        setp(o, common + [("tool_feedCutting","180 in/min"), ("tool_feedPlunge","50 in/min")])
-        o.parameters.itemByName("circularFaces").value.value = big_c
+        setp(o, mill + [("tool_feedCutting", feed)])
+        cv = o.parameters.itemByName("contours").value
+        sel = cv.getCurveSelections(); sel.clear()
+        for e in edges:
+            c = sel.createNewChainSelection(); c.inputGeometry = [e]
+            c.sideType = adsk.cam.SideTypes.AlwaysInsideSideType
+        cv.applyCurveSelections(sel)
+
+    if big_c:
+        hole_contour(big_c, t_big, "2 Holes 1/4in", "180 in/min")
+
     for tno in sorted(drill_c):
         faces = [f for f, _ in drill_c[tno]]
         t = tool_by_number(tno)
@@ -461,11 +509,7 @@ def run(_context: str):
             o.deleteMe()
             small_f.extend(borable)
     if small_f:
-        i = setup.operations.createInput("bore"); i.tool = t_small
-        i.displayName = "3b Bore small 1/8in"
-        o = setup.operations.add(i)
-        setp(o, common + [("tool_feedCutting","125 in/min"), ("tool_feedPlunge","50 in/min")])
-        o.parameters.itemByName("circularFaces").value.value = small_f
+        hole_contour(small_f, t_small, "3b Holes 1/8in", "125 in/min")
     if flipped:
         print(f"      *** {len(flipped)} part(s) UPSIDE DOWN - bevels face the "
               f"spoilboard, no toolpath possible:")

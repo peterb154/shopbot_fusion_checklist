@@ -87,6 +87,16 @@ state before rebuilding anything.
   on 18mm stock. A hole that matches a drill you own gets plunged instead:
   ~2s. `DRILLABLE` maps diameter to tool number; first match wins. Boring is
   ~3x faster with the 1/4" than the 1/8", so `BIG` is set at 8mm, not 9.
+- **Zero `verticalStockToLeave`, or nothing breaks through.** Fusion applies the
+  radial stock-to-leave downward as well, so a 0.02in finishing allowance holds
+  every profile 0.508mm above the breakthrough depth - bottom height reads
+  -12.518 while the posted toolpath stops at -12.010. No part comes free, and
+  nothing warns. Radial stock-to-leave stays: that is what the finishing pass
+  removes.
+- **Cut holes as contours, not bores.** The ShopBot post cannot express a helical
+  arc, so a bore is linearised into ~0.001mm Z steps: 96 holes came out 636,208
+  moves and 19MB. The same holes as circles at discrete depths post as arcs -
+  101K and 4.4 min against 24.3.
 - **Stock is built 0.01mm proud of the model.** Parts laid flat by joints come
   out a few *nanometres* thicker than nominal - 12.00000307mm against 12mm of
   stock. If any part pokes above the stock top, however slightly, Fusion refuses
