@@ -40,6 +40,9 @@ state before rebuilding anything.
 | `why3d.py` | For one sheet, every face that pulled a part into the 3D pass, with type, slope and area. Answers "why is it cutting a bevel there?" - which is how the angled-hole bug was found. |
 | `reach.py` | Concave radii on sloped faces against the ball radius of the tool, so you know before cutting which corners the tool cannot enter. |
 | `real3d.py` | Samples surface normals to separate genuinely sloped faces from vertical extrusion walls. Most NURBS faces in an imported model are walls the profile already cuts - 202 faces looked 3D, 138 actually were. |
+| `facedown.py` | Sloped area facing up vs down, per part. A part whose bevels all face down is upside down on the sheet - the spindle can never reach them. `flipped.py` only ever checked planar pocket floors and missed this entirely. |
+| `verify3d.py` | Posts each 3D pass and buckets every move by part. The only way to know a 3D op cuts what it claims - bucket against the operation's OWN parts, since nested part bounding boxes overlap. |
+| `facemax.py` | Largest single sloped face per part. Separates a real surface from a notch facet. |
 | `flipped.py` | Reports every pocket floor and which way it faces. A floor facing down means the part is placed upside down and would be machined through from the wrong side. Run after any re-nest. |
 | `paramdiff.py` | Diffs every setup parameter between two setups. The tool that found the nanometre stock bug below - when one setup works and another does not, diff them rather than theorise. |
 | `cleanup.py` | Deletes leftover `__trial` operations and reports setup health. Run before posting. |
@@ -109,6 +112,16 @@ state before rebuilding anything.
   does not clear the underside until the point is one tip-length past it: 0.95mm
   for a 118-degree 1/8in, 1.67mm for a 7/32in. The -0.02in that suits an endmill
   leaves a cone of uncut material. Derived from `tool_tipAngle`.
+- **Never take `abs()` of a face normal's Z.** A 59-degree bevel facing DOWN
+  scores identically to one facing up, so an upside-down part gets a toolpath for
+  geometry the spindle cannot reach, with no warning. Keep the sign and require
+  it positive. Checking pocket floors alone is not enough - `flipped.py` passed
+  every one of these parts.
+- **A face with no vertical extent is not a bevel.** One face sat entirely at
+  Z 18.00 on an 18mm part and still sampled at 20-60 degrees.
+- **A part earns a 3D pass on one substantial face (500mm2) or a genuine cluster
+  (8+ faces, 800mm2).** A total-area floor alone lets a 192mm2 notch facet drag a
+  89x707mm part into a finishing pass.
 - **A silhouette is silently ignored as a 3D machining boundary.**
   `machiningBoundarySel` accepts a SilhouetteSelection, reports no warning, and
   then scans the entire model anyway: 724,507 feed moves and 64m of cutting where

@@ -25,7 +25,11 @@ CUSP_MM = 0.083
 HOLE_R_MM   = 5.0    # a non-vertical cylinder this small is an angled HOLE, not a
                      # surface - 3-axis cannot make it and it must not drag a part
                      # into a 3D pass
-MIN_3D_AREA = 100.0  # mm2 of genuinely sloped surface before a part earns a pass
+MIN_3D_AREA  = 100.0   # mm2 of genuinely sloped surface before a part earns a pass
+MIN_3D_FACE  = 500.0   # ...or one face this big. A notch facet is not a bevel.
+MIN_3D_COUNT = 8       # ...or this many small ones (an edge treatment)
+MIN_3D_GROUP = 800.0   # ...totalling this much
+MIN_FACE_DROP = 0.5    # a face with no vertical extent cannot be a bevel
 FORCE = []                      # sheet indices to rebuild even if already done
 
 def classify(f):
@@ -101,24 +105,24 @@ def normal_faces_axis(f):
     rx, ry, rz = vx-d*ax.x, vy-d*ax.y, vz-d*ax.z
     return (rx*n.x + ry*n.y + rz*n.z) < 0
 
-def face_slopes(f, n=3):
-    """Angles from horizontal over the face. 0 = flat, 90 = vertical wall.
-    A NURBS face is usually just a vertical extrusion wall, which the outer
-    profile already cuts - sampling is the only way to tell those from real 3D."""
+def face_samples(f, n=3):
+    """[(slope_deg, normal_z)] over the face, keeping the SIGN of the normal.
+    abs() here is a trap: a 59deg bevel facing DOWN scores identically to one
+    facing up, so an upside-down part gets a toolpath for geometry the spindle
+    can never reach."""
     t = f.geometry.objectType.split("::")[-1]
+    ev = f.evaluator
     if t == "Plane":
-        a = math.degrees(math.acos(min(1.0, abs(f.geometry.normal.z))))
-        return [a, a]
+        nv = true_normal(f)
+        if nv is None: return []
+        return [(math.degrees(math.acos(min(1.0, abs(nv.z)))), nv.z)]
     if t == "Cylinder":
         g = f.geometry
-        if abs(abs(g.axis.z) - 1.0) < 1e-6:
-            return [90.0, 90.0]                    # ordinary vertical hole/wall
-        if normal_faces_axis(f):
-            return [90.0, 90.0]                    # angled HOLE - no 3-axis toolpath makes it
-        # otherwise the material is inside the cylinder: a convex rounded edge,
-        # which is exactly what a ball nose is for. Radius is NOT the test - a
-        # 3.175mm round and a 6.35mm angled hole look identical by radius.
-    ev = f.evaluator
+        if abs(abs(g.axis.z) - 1.0) < 1e-6: return [(90.0, 0.0)]
+        if normal_faces_axis(f):            return [(90.0, 0.0)]
+        # otherwise material is inside the cylinder: a convex rounded edge, which
+        # is what a ball nose is for. Radius is NOT the test - a 3.175mm round and
+        # a 6.35mm angled hole look identical by radius.
     rng = ev.parametricRange()
     if rng is None: return []
     out = []
@@ -127,44 +131,42 @@ def face_slopes(f, n=3):
             u = rng.minPoint.x + (rng.maxPoint.x - rng.minPoint.x)*(i+0.5)/n
             v = rng.minPoint.y + (rng.maxPoint.y - rng.minPoint.y)*(j+0.5)/n
             ok, nv = ev.getNormalAtParameter(adsk.core.Point2D.create(u, v))
-            if ok: out.append(math.degrees(math.acos(min(1.0, abs(nv.z)))))
+            if ok: out.append((math.degrees(math.acos(min(1.0, abs(nv.z)))), nv.z))
     return out
 
-def top_outer_loop(b):
-    """Edges of the outer loop of the body's top face, for use as a 3D machining
-    boundary. A SilhouetteSelection is accepted by machiningBoundarySel and then
-    silently ignored - Fusion scans the whole model instead, which is 724,507 feed
-    moves and 64m of cutting where the real answer is 3,287 and 7.5m. Chains are
-    honoured."""
-    zs = [v.geometry.z*10 for v in b.vertices]
-    zt = max(zs)
-    best = None
+def face_3d_area(f):
+    """Area of this face if it is a bevel machinable from above, else 0.
+    Returns (area, faces_down) so callers can report a flipped part."""
+    sm = face_samples(f)
+    if not sm: return 0.0, False
+    sl = [a for a, _ in sm]
+    if max(sl) < SLOPE_MIN or min(sl) > SLOPE_MAX: return 0.0, False
+    zs = [v.geometry.z*10 for v in f.vertices]
+    if not zs or (max(zs) - min(zs)) < MIN_FACE_DROP: return 0.0, False
+    mz = sum(z for _, z in sm) / len(sm)
+    if mz < 0: return 0.0, True          # points down - unreachable from the top
+    return f.area * 100, False
+
+def sloped_faces(b):
+    """(machinable areas, area facing down). Down-facing area means the part is
+    upside down on the sheet."""
+    areas, down = [], 0.0
     for f in b.faces:
-        if f.geometry.objectType != adsk.core.Plane.classType(): continue
-        if abs(abs(f.geometry.normal.z) - 1.0) > 1e-6: continue
-        fz = [v.geometry.z*10 for v in f.vertices]
-        if not fz or abs(sum(fz)/len(fz) - zt) > 0.05: continue
-        if best is None or f.area > best.area: best = f
-    if best is None: return None
-    for L in best.loops:
-        if L.isOuter: return list(L.edges)
-    return None
+        a, dn = face_3d_area(f)
+        if a > 0: areas.append(a)
+        elif dn:  down += f.area * 100
+    return areas, down
 
 def sloped_area(b):
-    """mm2 of face that overlaps the range the operation will actually cut.
-    A face at 86-89deg is a near-vertical wall: inside the op's slope confinement
-    it yields nothing, and an empty body in the batch takes the whole operation
-    down with it. A few mm2 of curvature is not a bevel either - one 42mm2 face
-    was pulling a 1838x703mm panel into a 3D finishing pass."""
-    tot = 0.0
-    for f in b.faces:
-        sl = face_slopes(f)
-        if sl and max(sl) >= SLOPE_MIN and min(sl) <= SLOPE_MAX:
-            tot += f.area * 100
-    return tot
+    return sum(sloped_faces(b)[0])
 
 def is_sloped(b):
-    return sloped_area(b) >= MIN_3D_AREA
+    """One substantial surface, or a genuine cluster of small ones. A single
+    small facet at a notch is neither."""
+    areas, _ = sloped_faces(b)
+    if not areas: return False
+    if max(areas) >= MIN_3D_FACE: return True
+    return len(areas) >= MIN_3D_COUNT and sum(areas) >= MIN_3D_GROUP
 
 def true_normal(f):
     """Outward normal of the FACE. f.geometry.normal is the underlying surface's
@@ -296,14 +298,19 @@ def run(_context: str):
 
     names = {m.name for m in setup.models}
     bodies, cutouts, big_c, small_c, tiny_c, floors, sloped = [], [], [], [], [], [], []
+    flipped = []
     drill_c = collections.defaultdict(list)
     for occ in des.rootComponent.allOccurrences:
         if occ.name not in names: continue
         for b in occ.bRepBodies:
             if not b.isSolid: continue
             bodies.append(b)
-            a3 = sloped_area(b)
-            if a3 >= MIN_3D_AREA: sloped.append((b, occ.name.split(':')[0].strip(), a3))
+            areas, down = sloped_faces(b)
+            nm3 = occ.name.split(':')[0].strip()
+            if down > MIN_3D_AREA and not areas:
+                flipped.append((nm3, down))
+            if is_sloped(b):
+                sloped.append((b, nm3, sum(areas)))
             _,_,_,_, zb, zt = extents(b)
             pl = [f for f in b.faces if f.geometry.objectType == adsk.core.Plane.classType()
                   and abs(abs(f.geometry.normal.z)-1.0) < 1e-6]
@@ -463,6 +470,11 @@ def run(_context: str):
         o = setup.operations.add(i)
         setp(o, common + [("tool_feedCutting","125 in/min"), ("tool_feedPlunge","50 in/min")])
         o.parameters.itemByName("circularFaces").value.value = small_f
+    if flipped:
+        print(f"      *** {len(flipped)} part(s) UPSIDE DOWN - bevels face the "
+              f"spoilboard, no toolpath possible:")
+        for nm3, a in flipped:
+            print(f"          {nm3:<22} {a:8.1f} mm2 of bevel unreachable")
     if sloped:
         t3 = tool_by_number(TOOL_3D)
         if t3 is None:
