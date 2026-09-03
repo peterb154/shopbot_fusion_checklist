@@ -338,6 +338,57 @@ setups differing in 15 parameters, and the answer was the one that looked like
 a rounding artefact.
 
 ---
+### 2026-09-03 - broke an Amana 46286 tapered ball nose on the F16 bevels
+
+Snapped the bit part way through a bevel on sheet 1. The operation was set to:
+
+```text
+maximum stepdown   9.0mm      on a 2.982mm diameter tool
+feedrate           160 ipm    = 3.81 thou/tooth, 3 flutes at 14,000rpm
+plunge             53 ipm
+```
+
+**9mm of depth on a 2.982mm bit is 3x the tool diameter buried in one pass**, and
+a tapered ball nose carries that load on its thinnest section. Multiple depths was
+already enabled - the stepdown number itself was the problem, so the checkbox
+being on proves nothing.
+
+What it runs at now, and survives:
+
+```text
+maximum stepdown   0.03in (0.762mm)   = 0.26x tool diameter
+feedrate           60 ipm             = 1.43 thou/tooth
+plunge             20 ipm
+```
+
+#### Depth of cut breaks a small bit; feedrate rarely does
+
+Feed governs chip thickness. Depth governs how much of the tool is buried and how
+much side load the tip carries. When something snaps, cut the stepdown first and
+leave the feed alone until the bit survives - going at the feed first is the
+instinct, and it is the wrong one.
+
+#### Scale stepdown to the TOOL, not to the stock
+
+The 9mm came from treating stepdown as a property of the material - "12mm stock,
+take it in two bites". That reasoning is fine for a 1/4in compression bit clearing
+a profile and lethal for a 3mm ball nose. A stepdown copied between operations is
+only valid if the tool came with it.
+
+Same trap in the other direction: the 3D passes derive stepdown from the tool's
+ball radius to hit a target cusp height, so 1.442mm is right for a 3.175mm ball
+and wrong for a 1.587mm one - the same number cuts 40% deeper than intended and
+leaves a coarser finish than the figure implies. `scripts/buildall.py` computes
+it per tool; an operation edited by hand keeps the tool but loses the derivation.
+
+#### After a breakage, look at the workpiece before re-running
+
+A bit that failed part way leaves material standing. Restarting the operation from
+the top means the new bit meets a full-depth step wherever the old one stopped,
+which is how the second one breaks. Check what actually got cut, and prefer fresh
+stock for that part if there is any doubt.
+
+---
 ---
 
 ## Known Issues & Investigation
